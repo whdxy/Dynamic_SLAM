@@ -21,4 +21,8 @@ Vocabulary/ORBvoc.txt
 build/
 *~
 lib/
+cmake-build-debug
+Thirdparty/Pangolin-0.5/build
+Tset/kitti360
+
 
