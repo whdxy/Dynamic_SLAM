@@ -63,6 +63,9 @@ protected:
     vector<int> mvIniMatches;
     int mState;
 
+    int mFPS;
+    long unsigned int mFrameId;
+
     Map* mpMap;
 
     std::mutex mMutex;

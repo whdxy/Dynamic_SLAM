@@ -197,8 +197,11 @@ cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRe
     }
 
     mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
-
     Track();
+
+    // new for fps
+    mvtime.push_back(std::chrono::steady_clock::now());
+    //cout << "num: " << mvtime.size() << "   fps:" << ComputeFPS() << endl;
 
     return mCurrentFrame.mTcw.clone();
 }
@@ -1587,6 +1590,18 @@ void Tracking::InformOnlyTracking(const bool &flag)
     mbOnlyTracking = flag;
 }
 
+int Tracking::ComputeFPS(){
+    int size = mvtime.size();
+    if(size<2)
+        return 0.0;
+    std::chrono::steady_clock::time_point t1=mvtime[0];
+    std::chrono::steady_clock::time_point t2=mvtime[size-1];
+    double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
 
+    if(ttrack>1.0)
+        mvtime.erase(mvtime.begin());
+
+    return (int)size/ttrack;
+}
 
 } //namespace ORB_SLAM

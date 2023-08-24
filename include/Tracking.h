@@ -117,6 +117,9 @@ public:
 
     void Reset();
 
+    // new for FPS
+    vector<std::chrono::steady_clock::time_point> mvtime;
+    int ComputeFPS();
 protected:
 
     // Main tracking function. It is independent of the input sensor.

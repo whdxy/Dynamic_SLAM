@@ -115,5 +115,5 @@ ${PROJECT_SOURCE_DIR}/Thirdparty/Pangolin-0.5/install/lib/libpangolin.so
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/Test)
 
-add_executable(stereo_kitti Test/stereo_kitti.cc)
-target_link_libraries(stereo_kitti ${PROJECT_NAME} GL)
+add_executable(stereo_dynamic Test/stereo_dynamic.cc)
+target_link_libraries(stereo_dynamic ${PROJECT_NAME} GL)

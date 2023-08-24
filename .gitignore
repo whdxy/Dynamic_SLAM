@@ -23,6 +23,7 @@ build/
 lib/
 cmake-build-debug
 Thirdparty/Pangolin-0.5/build
-Tset/kitti360
+Thirdparty/Pangolin-0.5/install
+Test/kitti360
 
 
