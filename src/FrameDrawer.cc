@@ -102,11 +102,20 @@ cv::Mat FrameDrawer::DrawFrame()
                 pt2.x=vCurrentKeys[i].pt.x+r;
                 pt2.y=vCurrentKeys[i].pt.y+r;
 
+                int classid=vCurrentKeys[i].class_id;
+
                 // This is a match to a MapPoint in the map
                 if(vbMap[i])
                 {
-                    cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
-                    cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
+                    if(classid == 26 ||  classid == 27 || classid == 28 || classid == 29 || classid == 30 || classid == 31 ||  classid == 32 || classid == 33){
+                        cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
+                        cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
+                    }
+                    else{
+                        cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
+                        cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
+                    }
+
                     mnTracked++;
                 }
                 else // This is match to a "visual odometry" MapPoint created in the last frame
@@ -118,6 +127,15 @@ cv::Mat FrameDrawer::DrawFrame()
             }
         }
     }
+
+    // test 20230829
+
+    ostringstream buffer;
+    buffer << "ImageSemantic_keypoints_" << mFrameId << ".png";
+    string imgfile = buffer.str();
+    string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
+    cv::imwrite(imgpath, im);
+
 
     cv::Mat imWithInfo;
     DrawTextInfo(im,state, imWithInfo);

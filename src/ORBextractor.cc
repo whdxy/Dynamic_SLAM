@@ -53,7 +53,7 @@
 *
 */
 
-
+#include <iostream>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d/features2d.hpp>
@@ -431,6 +431,7 @@ ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
     }
 
     mvImagePyramid.resize(nlevels);
+    mvImagePyramidSemantic.resize(nlevels);
 
     mnFeaturesPerLevel.resize(nlevels);
     float factor = 1.0f / scaleFactor;
@@ -762,6 +763,248 @@ vector<cv::KeyPoint> ORBextractor::DistributeOctTree(const vector<cv::KeyPoint>&
     return vResultKeys;
 }
 
+vector<cv::KeyPoint> ORBextractor::DistributeOctTreeSemantic(const vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,
+                                       const int &maxX, const int &minY, const int &maxY, const int &N, const int &level)
+{
+    // Compute how many initial nodes
+    const int nIni = round(static_cast<float>(maxX-minX)/(maxY-minY));
+
+    const float hX = static_cast<float>(maxX-minX)/nIni;
+
+    list<ExtractorNode> lNodes;
+
+    vector<ExtractorNode*> vpIniNodes;
+    vpIniNodes.resize(nIni);
+
+    for(int i=0; i<nIni; i++)
+    {
+        ExtractorNode ni;
+        ni.UL = cv::Point2i(hX*static_cast<float>(i),0);
+        ni.UR = cv::Point2i(hX*static_cast<float>(i+1),0);
+        ni.BL = cv::Point2i(ni.UL.x,maxY-minY);
+        ni.BR = cv::Point2i(ni.UR.x,maxY-minY);
+        ni.vKeys.reserve(vToDistributeKeys.size());
+
+        lNodes.push_back(ni);
+        vpIniNodes[i] = &lNodes.back();
+    }
+
+    //Associate points to childs
+    for(size_t i=0;i<vToDistributeKeys.size();i++)
+    {
+        const cv::KeyPoint &kp = vToDistributeKeys[i];
+        vpIniNodes[kp.pt.x/hX]->vKeys.push_back(kp);
+    }
+
+    list<ExtractorNode>::iterator lit = lNodes.begin();
+
+    while(lit!=lNodes.end())
+    {
+        if(lit->vKeys.size()==1)
+        {
+            lit->bNoMore=true;
+            lit++;
+        }
+        else if(lit->vKeys.empty())
+            lit = lNodes.erase(lit);
+        else
+            lit++;
+    }
+
+    bool bFinish = false;
+
+    int iteration = 0;
+
+    vector<pair<int,ExtractorNode*> > vSizeAndPointerToNode;
+    vSizeAndPointerToNode.reserve(lNodes.size()*4);
+
+    while(!bFinish)
+    {
+        iteration++;
+
+        int prevSize = lNodes.size();
+
+        lit = lNodes.begin();
+
+        int nToExpand = 0;
+
+        vSizeAndPointerToNode.clear();
+
+        while(lit!=lNodes.end())
+        {
+            if(lit->bNoMore)
+            {
+                // If node only contains one point do not subdivide and continue
+                lit++;
+                continue;
+            }
+            else
+            {
+                // If more than one point, subdivide
+                ExtractorNode n1,n2,n3,n4;
+                lit->DivideNode(n1,n2,n3,n4);
+
+                // Add childs if they contain points
+                if(n1.vKeys.size()>0)
+                {
+                    lNodes.push_front(n1);
+                    if(n1.vKeys.size()>1)
+                    {
+                        nToExpand++;
+                        vSizeAndPointerToNode.push_back(make_pair(n1.vKeys.size(),&lNodes.front()));
+                        lNodes.front().lit = lNodes.begin();
+                    }
+                }
+                if(n2.vKeys.size()>0)
+                {
+                    lNodes.push_front(n2);
+                    if(n2.vKeys.size()>1)
+                    {
+                        nToExpand++;
+                        vSizeAndPointerToNode.push_back(make_pair(n2.vKeys.size(),&lNodes.front()));
+                        lNodes.front().lit = lNodes.begin();
+                    }
+                }
+                if(n3.vKeys.size()>0)
+                {
+                    lNodes.push_front(n3);
+                    if(n3.vKeys.size()>1)
+                    {
+                        nToExpand++;
+                        vSizeAndPointerToNode.push_back(make_pair(n3.vKeys.size(),&lNodes.front()));
+                        lNodes.front().lit = lNodes.begin();
+                    }
+                }
+                if(n4.vKeys.size()>0)
+                {
+                    lNodes.push_front(n4);
+                    if(n4.vKeys.size()>1)
+                    {
+                        nToExpand++;
+                        vSizeAndPointerToNode.push_back(make_pair(n4.vKeys.size(),&lNodes.front()));
+                        lNodes.front().lit = lNodes.begin();
+                    }
+                }
+
+                lit=lNodes.erase(lit);
+                continue;
+            }
+        }
+
+        // Finish if there are more nodes than required features
+        // or all nodes contain just one point
+        if((int)lNodes.size()>=N || (int)lNodes.size()==prevSize)
+        {
+            bFinish = true;
+        }
+        else if(((int)lNodes.size()+nToExpand*3)>N)
+        {
+
+            while(!bFinish)
+            {
+
+                prevSize = lNodes.size();
+
+                vector<pair<int,ExtractorNode*> > vPrevSizeAndPointerToNode = vSizeAndPointerToNode;
+                vSizeAndPointerToNode.clear();
+
+                sort(vPrevSizeAndPointerToNode.begin(),vPrevSizeAndPointerToNode.end());
+                for(int j=vPrevSizeAndPointerToNode.size()-1;j>=0;j--)
+                {
+                    ExtractorNode n1,n2,n3,n4;
+                    vPrevSizeAndPointerToNode[j].second->DivideNode(n1,n2,n3,n4);
+
+                    // Add childs if they contain points
+                    if(n1.vKeys.size()>0)
+                    {
+                        lNodes.push_front(n1);
+                        if(n1.vKeys.size()>1)
+                        {
+                            vSizeAndPointerToNode.push_back(make_pair(n1.vKeys.size(),&lNodes.front()));
+                            lNodes.front().lit = lNodes.begin();
+                        }
+                    }
+                    if(n2.vKeys.size()>0)
+                    {
+                        lNodes.push_front(n2);
+                        if(n2.vKeys.size()>1)
+                        {
+                            vSizeAndPointerToNode.push_back(make_pair(n2.vKeys.size(),&lNodes.front()));
+                            lNodes.front().lit = lNodes.begin();
+                        }
+                    }
+                    if(n3.vKeys.size()>0)
+                    {
+                        lNodes.push_front(n3);
+                        if(n3.vKeys.size()>1)
+                        {
+                            vSizeAndPointerToNode.push_back(make_pair(n3.vKeys.size(),&lNodes.front()));
+                            lNodes.front().lit = lNodes.begin();
+                        }
+                    }
+                    if(n4.vKeys.size()>0)
+                    {
+                        lNodes.push_front(n4);
+                        if(n4.vKeys.size()>1)
+                        {
+                            vSizeAndPointerToNode.push_back(make_pair(n4.vKeys.size(),&lNodes.front()));
+                            lNodes.front().lit = lNodes.begin();
+                        }
+                    }
+
+                    lNodes.erase(vPrevSizeAndPointerToNode[j].second->lit);
+
+                    if((int)lNodes.size()>=N)
+                        break;
+                }
+
+                if((int)lNodes.size()>=N || (int)lNodes.size()==prevSize)
+                    bFinish = true;
+
+            }
+        }
+    }
+
+    // Retain the best point in each node
+    vector<cv::KeyPoint> vResultKeys;
+    vResultKeys.reserve(nfeatures);
+    for(list<ExtractorNode>::iterator lit=lNodes.begin(); lit!=lNodes.end(); lit++)
+    {
+        vector<cv::KeyPoint> &vNodeKeys = lit->vKeys;
+        cv::KeyPoint* pKP = &vNodeKeys[0];
+        float maxResponse = pKP->response;
+
+        bool bmaxResponseiscontain = false;
+
+        for(size_t k=1;k<vNodeKeys.size();k++)
+        {
+
+            int classid = (int)mvImagePyramidSemantic[level].at<char>(vNodeKeys[k].pt.y, vNodeKeys[k].pt.x);
+            vNodeKeys[k].class_id = classid;
+
+
+            if(classid == 26 ||  classid == 27 || classid == 28 || classid == 29 || classid == 30 || classid == 31 ||  classid == 32 || classid == 33){
+                vResultKeys.push_back(vNodeKeys[k]);
+            }
+
+            if(vNodeKeys[k].response>maxResponse)
+            {
+                pKP = &vNodeKeys[k];
+                maxResponse = vNodeKeys[k].response;
+
+                if(classid == 26 ||  classid == 27 || classid == 28 || classid == 29 || classid == 30 || classid == 31 ||  classid == 32 || classid == 33)
+                    bmaxResponseiscontain = true;
+                else
+                    bmaxResponseiscontain = false;
+            }
+        }
+        if(!bmaxResponseiscontain)
+            vResultKeys.push_back(*pKP);
+    }
+    //std::cout << vResultKeys.size() << std::endl;
+    return vResultKeys;
+}
+
 void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoints)
 {
     allKeypoints.resize(nlevels);
@@ -833,6 +1076,100 @@ void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
 
         keypoints = DistributeOctTree(vToDistributeKeys, minBorderX, maxBorderX,
                                       minBorderY, maxBorderY,mnFeaturesPerLevel[level], level);
+
+
+        const int scaledPatchSize = PATCH_SIZE*mvScaleFactor[level];
+
+        // Add border to coordinates and scale information
+        const int nkps = keypoints.size();
+        for(int i=0; i<nkps ; i++)
+        {
+            keypoints[i].pt.x+=minBorderX;
+            keypoints[i].pt.y+=minBorderY;
+            keypoints[i].octave=level;
+            keypoints[i].size = scaledPatchSize;
+        }
+    }
+
+    // compute orientations
+    for (int level = 0; level < nlevels; ++level)
+        computeOrientation(mvImagePyramid[level], allKeypoints[level], umax);
+}
+
+void ORBextractor::ComputeKeyPointsOctTreeSemantic(vector<vector<KeyPoint> >& allKeypoints)
+{
+    allKeypoints.resize(nlevels);
+
+    const float W = 30;
+
+    for (int level = 0; level < nlevels; ++level)
+    {
+        const int minBorderX = EDGE_THRESHOLD-3;
+        const int minBorderY = minBorderX;
+        const int maxBorderX = mvImagePyramid[level].cols-EDGE_THRESHOLD+3;
+        const int maxBorderY = mvImagePyramid[level].rows-EDGE_THRESHOLD+3;
+
+        vector<cv::KeyPoint> vToDistributeKeys;
+        vToDistributeKeys.reserve(nfeatures*10);
+
+        const float width = (maxBorderX-minBorderX);
+        const float height = (maxBorderY-minBorderY);
+
+        const int nCols = width/W;
+        const int nRows = height/W;
+        const int wCell = ceil(width/nCols);
+        const int hCell = ceil(height/nRows);
+
+        for(int i=0; i<nRows; i++)
+        {
+            const float iniY =minBorderY+i*hCell;
+            float maxY = iniY+hCell+6;
+
+            if(iniY>=maxBorderY-3)
+                continue;
+            if(maxY>maxBorderY)
+                maxY = maxBorderY;
+
+            for(int j=0; j<nCols; j++)
+            {
+                const float iniX =minBorderX+j*wCell;
+                float maxX = iniX+wCell+6;
+                if(iniX>=maxBorderX-6)
+                    continue;
+                if(maxX>maxBorderX)
+                    maxX = maxBorderX;
+
+                vector<cv::KeyPoint> vKeysCell;
+                FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX),
+                     vKeysCell,iniThFAST,true);
+
+                if(vKeysCell.empty())
+                {
+                    FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX),
+                         vKeysCell,minThFAST,true);
+                }
+
+                if(!vKeysCell.empty())
+                {
+                    for(vector<cv::KeyPoint>::iterator vit=vKeysCell.begin(); vit!=vKeysCell.end();vit++)
+                    {
+                        (*vit).pt.x+=j*wCell;
+                        (*vit).pt.y+=i*hCell;
+                        vToDistributeKeys.push_back(*vit);
+                    }
+                }
+
+            }
+        }
+
+        vector<KeyPoint> & keypoints = allKeypoints[level];
+        keypoints.reserve(nfeatures);
+
+        //keypoints = DistributeOctTree(vToDistributeKeys, minBorderX, maxBorderX,
+        //                              minBorderY, maxBorderY,mnFeaturesPerLevel[level], level);
+
+        keypoints = DistributeOctTreeSemantic(vToDistributeKeys, minBorderX, maxBorderX,
+                                              minBorderY, maxBorderY,mnFeaturesPerLevel[level], level);
 
         const int scaledPatchSize = PATCH_SIZE*mvScaleFactor[level];
 
@@ -1110,13 +1447,16 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
         return;
 
     Mat image = _image.getMat();
+    Mat imageSemantic = _imageSemantic.getMat();
+
     assert(image.type() == CV_8UC1 );
 
     // Pre-compute the scale pyramid
     ComputePyramid(image);
+    ComputePyramidSemantic(imageSemantic); // new
 
     vector < vector<KeyPoint> > allKeypoints;
-    ComputeKeyPointsOctTree(allKeypoints);
+    ComputeKeyPointsOctTreeSemantic(allKeypoints);
     //ComputeKeyPointsOld(allKeypoints);
 
     Mat descriptors;
@@ -1167,7 +1507,6 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
     }
 }
 
-
 void ORBextractor::ComputePyramid(cv::Mat image)
 {
     for (int level = 0; level < nlevels; ++level)
@@ -1184,15 +1523,85 @@ void ORBextractor::ComputePyramid(cv::Mat image)
             resize(mvImagePyramid[level-1], mvImagePyramid[level], sz, 0, 0, INTER_LINEAR);
 
             copyMakeBorder(mvImagePyramid[level], temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
-                           BORDER_REFLECT_101+BORDER_ISOLATED);            
+                           BORDER_REFLECT_101+BORDER_ISOLATED);
+
+            // test 20230829
+            /*
+            ostringstream buffer;
+            buffer << "Pyramid_" << level << ".png";
+            string imgfile = buffer.str();
+            string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
+            cv::imwrite(imgpath, mvImagePyramid[level]);
+             */
+
         }
         else
         {
             copyMakeBorder(image, temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
-                           BORDER_REFLECT_101);            
+                           BORDER_REFLECT_101);
+
+            // test 20230829
+            /*
+            ostringstream buffer;
+            buffer << "Pyramid_" << level << ".png";
+            string imgfile = buffer.str();
+            string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
+            cv::imwrite(imgpath, mvImagePyramid[level]);
+             */
         }
     }
+    // test 20230829
+    //cv::waitKey(0);
 
 }
 
+void ORBextractor::ComputePyramidSemantic(cv::Mat imageSemantic)
+{
+    for (int level = 0; level < nlevels; ++level)
+    {
+        float scale = mvInvScaleFactor[level];
+        Size sz(cvRound((float)imageSemantic.cols*scale), cvRound((float)imageSemantic.rows*scale));
+        Size wholeSize(sz.width + EDGE_THRESHOLD*2, sz.height + EDGE_THRESHOLD*2);
+        Mat temp(wholeSize, imageSemantic.type()), masktemp;
+        mvImagePyramidSemantic[level] = temp(Rect(EDGE_THRESHOLD, EDGE_THRESHOLD, sz.width, sz.height));
+
+        // Compute the resized image
+        if( level != 0 )
+        {
+            resize(mvImagePyramidSemantic[level-1], mvImagePyramidSemantic[level], sz, 0, 0, INTER_LINEAR);
+
+            copyMakeBorder(mvImagePyramidSemantic[level], temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
+                           BORDER_REFLECT_101+BORDER_ISOLATED);
+
+            // test 20230829
+            /*
+            ostringstream buffer;
+            buffer << "Pyramid_Semantic_" << level << ".png";
+            string imgfile = buffer.str();
+            string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
+            cv::imwrite(imgpath, mvImagePyramidSemantic[level]);
+             */
+
+
+        }
+        else
+        {
+            copyMakeBorder(imageSemantic, temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
+                           BORDER_REFLECT_101);
+
+            // test 20230829
+            /*
+            ostringstream buffer;
+            buffer << "Pyramid_Semantic_" << level << ".png";
+            string imgfile = buffer.str();
+            string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
+            cv::imwrite(imgpath, mvImagePyramidSemantic[level]);
+             */
+
+        }
+    }
+    // test 20230829
+    //cv::waitKey(0);
+
+}
 } //namespace ORB_SLAM
