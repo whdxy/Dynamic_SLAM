@@ -60,6 +60,8 @@ private:
 
     bool Stop();
 
+    //void SetStop(bool& isStop);
+
     System* mpSystem;
     FrameDrawer* mpFrameDrawer;
     MapDrawer* mpMapDrawer;
@@ -80,6 +82,8 @@ private:
     bool mbStopped;
     bool mbStopRequested;
     std::mutex mMutexStop;
+
+    //bool mbmenuStop;
 
 };
 

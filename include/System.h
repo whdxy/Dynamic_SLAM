@@ -97,6 +97,9 @@ public:
     // This function must be called before saving the trajectory.
     void Shutdown();
 
+    void SetStop(bool isStop);
+    bool isStop();
+
     // Save camera trajectory in the TUM RGB-D dataset format.
     // Only for stereo and RGB-D. This method does not work for monocular.
     // Call first Shutdown()
@@ -177,6 +180,9 @@ private:
     std::vector<MapPoint*> mTrackedMapPoints;
     std::vector<cv::KeyPoint> mTrackedKeyPointsUn;
     std::mutex mMutexState;
+
+    bool bisStop; //
+    std::mutex mMutexStop;//
 };
 
 }// namespace ORB_SLAM

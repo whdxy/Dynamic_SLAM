@@ -127,6 +127,10 @@ int main(int argc, char **argv)
 
         if(ttrack<T)
             usleep((T-ttrack)*1e6);
+
+        while(SLAM.isStop()){
+            usleep(300);
+        }
     }
 
     // Stop all threads

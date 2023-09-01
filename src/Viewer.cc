@@ -72,6 +72,7 @@ void Viewer::Run()
     pangolin::Var<bool> menuShowGraph("menu.Show Graph",true,true);
     pangolin::Var<bool> menuLocalizationMode("menu.Localization Mode",false,true);
     pangolin::Var<bool> menuReset("menu.Reset",false,false);
+    pangolin::Var<bool> menuStop("menu.Stop/Start",false,false);
 
     // Define Camera Render Object (for view / scene browsing)
     pangolin::OpenGlRenderState s_cam(
@@ -122,6 +123,17 @@ void Viewer::Run()
         {
             mpSystem->DeactivateLocalizationMode();
             bLocalizationMode = false;
+        }
+
+
+        if(menuStop){
+            //cout << "mpSystem->SetStop(true)" << endl;
+            mpSystem->SetStop(true);
+            usleep(300);
+        }
+        else{
+            //cout << "menuStop:" << menuStop << endl;
+            mpSystem->SetStop(false);
         }
 
         d_cam.Activate(s_cam);
@@ -220,7 +232,6 @@ bool Viewer::Stop()
     }
 
     return false;
-
 }
 
 void Viewer::Release()
@@ -229,4 +240,12 @@ void Viewer::Release()
     mbStopped = false;
 }
 
+/*
+void Viewer::SetStop(bool& isStop){
+    if(mbmenuStop)
+        isStop = true;
+    else
+        isStop = false;
+}
+ */
 }

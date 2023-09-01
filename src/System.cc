@@ -31,7 +31,7 @@ namespace ORB_SLAM2
 
 System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
                const bool bUseViewer):mSensor(sensor), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false),mbActivateLocalizationMode(false),
-        mbDeactivateLocalizationMode(false)
+        mbDeactivateLocalizationMode(false), bisStop(false)
 {
     // Output welcome message
     cout << endl <<
@@ -371,6 +371,17 @@ void System::Shutdown()
         pangolin::BindToContext("ORB-SLAM2: Map Viewer");
 }
 
+void System::SetStop(bool isStop){
+    unique_lock<mutex> lock(mMutexStop);
+    bisStop = isStop;
+}
+
+bool System::isStop(){
+    unique_lock<mutex> lock(mMutexStop);
+    //cout << "bisStop" << bisStop << endl;
+    return bisStop;
+}
+
 void System::SaveTrajectoryTUM(const string &filename)
 {
     cout << endl << "Saving camera trajectory to " << filename << " ..." << endl;
@@ -430,7 +441,6 @@ void System::SaveTrajectoryTUM(const string &filename)
     f.close();
     cout << endl << "trajectory saved!" << endl;
 }
-
 
 void System::SaveKeyFrameTrajectoryTUM(const string &filename)
 {
