@@ -209,6 +209,7 @@ cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRe
 cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const cv::Mat &imRectSemantic, const double &timestamp)
 {
     mImGray = imRectLeft;
+    //mImGraySemantic = imRectSemantic; // test 20230901
     cv::Mat imGrayRight = imRectRight;
     cv::Mat imGraySemantic = imRectSemantic;
 

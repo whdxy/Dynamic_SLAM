@@ -129,12 +129,13 @@ cv::Mat FrameDrawer::DrawFrame()
     }
 
     // test 20230829
-
+    /*
     ostringstream buffer;
     buffer << "ImageSemantic_keypoints_" << mFrameId << ".png";
     string imgfile = buffer.str();
     string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
     cv::imwrite(imgpath, im);
+     */
 
 
     cv::Mat imWithInfo;
@@ -186,6 +187,7 @@ void FrameDrawer::Update(Tracking *pTracker)
 {
     unique_lock<mutex> lock(mMutex);
     pTracker->mImGray.copyTo(mIm);
+    //pTracker->mImGraySemantic.copyTo(mIm); // test 20230901
     mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;
     N = mvCurrentKeys.size();
     mvbVO = vector<bool>(N,false);

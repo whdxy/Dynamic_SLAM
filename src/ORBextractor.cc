@@ -407,6 +407,46 @@ static int bit_pattern_31_[256*4] =
     -1,-6, 0,-11/*mean (0.127148), correlation (0.547401)*/
 };
 
+/// new
+static int semantic_pattern_[16*2]={
+    3,0,
+    3,-1,
+    2,-2,
+    1,-3,
+    0,-3,
+    -1,-3,
+    -2,-2,
+    -3,-1,
+    -3,0,
+    -3,1,
+    -2,2,
+    -1,3,
+    0,3,
+    1,3,
+    2,2,
+    3,1
+};
+/*
+static int semantic_pattern_[8*2]={
+        0,-2,
+        1,-1,
+        2,0,
+        1,1,
+        0,2,
+        -1,1,
+        -2,0,
+        -1,-1
+};
+ */
+
+/*
+static int semantic_pattern_[4*2]={
+        1,-1,
+        1,1,
+        -1,1,
+        -1,-1
+};
+*/
 ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
          int _iniThFAST, int _minThFAST):
     nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
@@ -468,6 +508,10 @@ ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
         umax[v] = v0;
         ++v0;
     }
+
+    /// new
+    std::vector<int> vVihicle{26,27,28,29,30,31,32};
+    msVehicle.insert(vVihicle.begin(), vVihicle.end());
 }
 
 static void computeOrientation(const Mat& image, vector<KeyPoint>& keypoints, const vector<int>& umax)
@@ -979,20 +1023,19 @@ vector<cv::KeyPoint> ORBextractor::DistributeOctTreeSemantic(const vector<cv::Ke
         for(size_t k=1;k<vNodeKeys.size();k++)
         {
 
-            int classid = (int)mvImagePyramidSemantic[level].at<char>(vNodeKeys[k].pt.y, vNodeKeys[k].pt.x);
-            vNodeKeys[k].class_id = classid;
+            bool b = ComputeIsInSemantic(vNodeKeys[k], level);
+            //int classid = (int)mvImagePyramidSemantic[level].at<char>(vNodeKeys[k].pt.y, vNodeKeys[k].pt.x);
+            //vNodeKeys[k].class_id = classid;
 
-
-            if(classid == 26 ||  classid == 27 || classid == 28 || classid == 29 || classid == 30 || classid == 31 ||  classid == 32 || classid == 33){
+            if(b)
                 vResultKeys.push_back(vNodeKeys[k]);
-            }
 
             if(vNodeKeys[k].response>maxResponse)
             {
                 pKP = &vNodeKeys[k];
                 maxResponse = vNodeKeys[k].response;
 
-                if(classid == 26 ||  classid == 27 || classid == 28 || classid == 29 || classid == 30 || classid == 31 ||  classid == 32 || classid == 33)
+                if(b)
                     bmaxResponseiscontain = true;
                 else
                     bmaxResponseiscontain = false;
@@ -1003,6 +1046,38 @@ vector<cv::KeyPoint> ORBextractor::DistributeOctTreeSemantic(const vector<cv::Ke
     }
     //std::cout << vResultKeys.size() << std::endl;
     return vResultKeys;
+}
+
+bool ORBextractor::ComputeIsInSemantic(cv::KeyPoint& kp_, const int &level){
+
+    const int col = mvImagePyramidSemantic[level].cols;
+    const int row = mvImagePyramidSemantic[level].rows;
+    //cout << "char: " << mvImagePyramidSemantic[level].at<char>(kp_.pt.y, kp_.pt.x) << endl;
+    const int classid = (int)mvImagePyramidSemantic[level].at<char>(kp_.pt.y, kp_.pt.x);
+    //cout << "classid:" << classid << endl;
+
+
+    if(!msVehicle.count(classid)){
+        kp_.class_id = -1;
+        return false;
+    }
+
+    for(int i=0; i<sizeof(semantic_pattern_)/sizeof(semantic_pattern_[0])-1; i++){
+        int x = kp_.pt.x + semantic_pattern_[i];
+        int y = kp_.pt.y + semantic_pattern_[i+1];
+        if(x<0 || y<0 || x>col || y>row){
+            kp_.class_id = -1;
+            return false;
+        }
+        int classid_ = (int)mvImagePyramidSemantic[level].at<char>(y, x);
+        if(classid_ != classid){
+            kp_.class_id = -1;
+            return false;
+        }
+    }
+    kp_.class_id = classid;
+    //cout << "ComputeIsInSemantic" << endl;
+    return true;
 }
 
 void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoints)
@@ -1464,6 +1539,9 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
     int nkeypoints = 0;
     for (int level = 0; level < nlevels; ++level)
         nkeypoints += (int)allKeypoints[level].size();
+
+    //cout << "nkeypoints: " << nkeypoints << endl;
+
     if( nkeypoints == 0 )
         _descriptors.release();
     else

@@ -99,6 +99,7 @@ public:
     // Current Frame
     Frame mCurrentFrame;
     cv::Mat mImGray;
+    //cv::Mat mImGraySemantic; // test 29230901
 
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;

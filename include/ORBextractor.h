@@ -22,6 +22,7 @@
 #define ORBEXTRACTOR_H
 
 #include <vector>
+#include <set>
 #include <list>
 #include <opencv/cv.h>
 
@@ -89,6 +90,7 @@ public:
     std::vector<cv::Mat> mvImagePyramid;
 
     std::vector<cv::Mat> mvImagePyramidSemantic; // new
+    std::set<int> msVehicle; // new
 
 protected:
 
@@ -97,6 +99,8 @@ protected:
 
     void ComputeKeyPointsOctTree(std::vector<std::vector<cv::KeyPoint> >& allKeypoints);
     void ComputeKeyPointsOctTreeSemantic(std::vector<std::vector<cv::KeyPoint> >& allKeypoints);
+
+    bool ComputeIsInSemantic(cv::KeyPoint& kp, const int &level);
 
     std::vector<cv::KeyPoint> DistributeOctTree(const std::vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,
                                            const int &maxX, const int &minY, const int &maxY, const int &nFeatures, const int &level);
