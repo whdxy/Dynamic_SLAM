@@ -407,6 +407,7 @@ static int bit_pattern_31_[256*4] =
     -1,-6, 0,-11/*mean (0.127148), correlation (0.547401)*/
 };
 
+/*
 /// new
 static int semantic_pattern_[16*2]={
     3,0,
@@ -426,27 +427,8 @@ static int semantic_pattern_[16*2]={
     2,2,
     3,1
 };
-/*
-static int semantic_pattern_[8*2]={
-        0,-2,
-        1,-1,
-        2,0,
-        1,1,
-        0,2,
-        -1,1,
-        -2,0,
-        -1,-1
-};
  */
 
-/*
-static int semantic_pattern_[4*2]={
-        1,-1,
-        1,1,
-        -1,1,
-        -1,-1
-};
-*/
 ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
          int _iniThFAST, int _minThFAST):
     nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
@@ -807,6 +789,7 @@ vector<cv::KeyPoint> ORBextractor::DistributeOctTree(const vector<cv::KeyPoint>&
     return vResultKeys;
 }
 
+/*
 vector<cv::KeyPoint> ORBextractor::DistributeOctTreeSemantic(const vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,
                                        const int &maxX, const int &minY, const int &maxY, const int &N, const int &level)
 {
@@ -1047,7 +1030,9 @@ vector<cv::KeyPoint> ORBextractor::DistributeOctTreeSemantic(const vector<cv::Ke
     //std::cout << vResultKeys.size() << std::endl;
     return vResultKeys;
 }
+*/
 
+/*
 bool ORBextractor::ComputeIsInSemantic(cv::KeyPoint& kp_, const int &level){
 
     const int col = mvImagePyramidSemantic[level].cols;
@@ -1079,6 +1064,7 @@ bool ORBextractor::ComputeIsInSemantic(cv::KeyPoint& kp_, const int &level){
     //cout << "ComputeIsInSemantic" << endl;
     return true;
 }
+*/
 
 void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoints)
 {
@@ -1171,6 +1157,7 @@ void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
         computeOrientation(mvImagePyramid[level], allKeypoints[level], umax);
 }
 
+/*
 void ORBextractor::ComputeKeyPointsOctTreeSemantic(vector<vector<KeyPoint> >& allKeypoints)
 {
     allKeypoints.resize(nlevels);
@@ -1263,6 +1250,7 @@ void ORBextractor::ComputeKeyPointsOctTreeSemantic(vector<vector<KeyPoint> >& al
     for (int level = 0; level < nlevels; ++level)
         computeOrientation(mvImagePyramid[level], allKeypoints[level], umax);
 }
+*/
 
 void ORBextractor::ComputeKeyPointsOld(std::vector<std::vector<KeyPoint> > &allKeypoints)
 {
@@ -1452,8 +1440,7 @@ static void computeDescriptors(const Mat& image, vector<KeyPoint>& keypoints, Ma
         computeOrbDescriptor(keypoints[i], image, &pattern[0], descriptors.ptr((int)i));
 }
 
-void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPoint>& _keypoints,
-                      OutputArray _descriptors)
+void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPoint>& _keypoints, OutputArray _descriptors)
 { 
     if(_image.empty())
         return;
@@ -1516,23 +1503,25 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
     }
 }
 
+/// 20230907 新增读取语义图
 void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSemantic, cv::InputArray _mask, std::vector<cv::KeyPoint>& _keypoints, cv::OutputArray _descriptors)
 {
     if(_image.empty())
         return;
 
     Mat image = _image.getMat();
-    Mat imageSemantic = _imageSemantic.getMat();
+    //Mat imageSemantic = _imageSemantic.getMat();
 
-    assert(image.type() == CV_8UC1 );
+    assert(image.type() == CV_8UC1);
 
     // Pre-compute the scale pyramid
+    // 计算金字塔
     ComputePyramid(image);
-    ComputePyramidSemantic(imageSemantic); // new
+    //ComputePyramidSemantic(imageSemantic); // new
 
     vector < vector<KeyPoint> > allKeypoints;
-    ComputeKeyPointsOctTreeSemantic(allKeypoints);
-    //ComputeKeyPointsOld(allKeypoints);
+    //ComputeKeyPointsOctTreeSemantic(allKeypoints);
+    ComputeKeyPointsOld(allKeypoints);
 
     Mat descriptors;
 
@@ -1580,6 +1569,7 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
                          keypointEnd = keypoints.end(); keypoint != keypointEnd; ++keypoint)
                 keypoint->pt *= scale;
         }
+
         // And add the keypoints to the output
         _keypoints.insert(_keypoints.end(), keypoints.begin(), keypoints.end());
     }
@@ -1633,6 +1623,7 @@ void ORBextractor::ComputePyramid(cv::Mat image)
 
 }
 
+/*
 void ORBextractor::ComputePyramidSemantic(cv::Mat imageSemantic)
 {
     for (int level = 0; level < nlevels; ++level)
@@ -1651,35 +1642,16 @@ void ORBextractor::ComputePyramidSemantic(cv::Mat imageSemantic)
             copyMakeBorder(mvImagePyramidSemantic[level], temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
                            BORDER_REFLECT_101+BORDER_ISOLATED);
 
-            // test 20230829
-            /*
-            ostringstream buffer;
-            buffer << "Pyramid_Semantic_" << level << ".png";
-            string imgfile = buffer.str();
-            string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
-            cv::imwrite(imgpath, mvImagePyramidSemantic[level]);
-             */
-
-
         }
         else
         {
             copyMakeBorder(imageSemantic, temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
                            BORDER_REFLECT_101);
 
-            // test 20230829
-            /*
-            ostringstream buffer;
-            buffer << "Pyramid_Semantic_" << level << ".png";
-            string imgfile = buffer.str();
-            string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
-            cv::imwrite(imgpath, mvImagePyramidSemantic[level]);
-             */
-
         }
     }
     // test 20230829
     //cv::waitKey(0);
-
 }
+*/
 } //namespace ORB_SLAM
