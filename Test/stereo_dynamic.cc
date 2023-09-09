@@ -211,7 +211,8 @@ void LoadImages(const string &strPathToSequence, vector<string> &vstrImageLeft, 
 
     string strPrefixLeft = strPathToSequence + "/image_2/";
     string strPrefixRight = strPathToSequence + "/image_3/";
-    string strPrefixSemantic = strPathToSequence + "/semantic/";
+    //string strPrefixSemantic = strPathToSequence + "/semantic/";
+    string strPrefixSemantic = strPathToSequence + "/instance/";
 
     const int nTimes = vTimestamps.size();
     vstrImageLeft.resize(nTimes);

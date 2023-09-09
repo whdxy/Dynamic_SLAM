@@ -142,6 +142,9 @@ public:
     std::vector<cv::KeyPoint> mvKeys, mvKeysRight;
     std::vector<cv::KeyPoint> mvKeysUn;
 
+    /// new 储存各个实例类中的特征点
+    std::vector<std::vector<cv::KeyPoint>> mvKeysDynamic, mvKeysRightDynamic;
+
     // Corresponding stereo coordinate and depth for each keypoint.
     // "Monocular" keypoints have a negative value.
     std::vector<float> mvuRight;

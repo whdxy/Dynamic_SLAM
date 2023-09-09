@@ -1504,14 +1504,14 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
 }
 
 /// 20230907 新增读取语义图
-void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSemantic, cv::InputArray _mask, std::vector<cv::KeyPoint>& _keypoints, cv::OutputArray _descriptors)
+void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSemantic, cv::InputArray _mask,
+        std::vector<cv::KeyPoint>& _keypoints, std::vector<std::vector<cv::KeyPoint>>& _keypoints_dynamic, cv::OutputArray _descriptors)
 {
     if(_image.empty())
         return;
 
     Mat image = _image.getMat();
-    //Mat imageSemantic = _imageSemantic.getMat();
-
+    Mat imageSemantic = _imageSemantic.getMat();
     assert(image.type() == CV_8UC1);
 
     // Pre-compute the scale pyramid
@@ -1520,17 +1520,24 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
     //ComputePyramidSemantic(imageSemantic); // new
 
     vector < vector<KeyPoint> > allKeypoints;
+    ComputeKeyPointsOctTree(allKeypoints);
     //ComputeKeyPointsOctTreeSemantic(allKeypoints);
-    ComputeKeyPointsOld(allKeypoints);
+    //ComputeKeyPointsOld(allKeypoints);
 
-    Mat descriptors;
 
     int nkeypoints = 0;
     for (int level = 0; level < nlevels; ++level)
         nkeypoints += (int)allKeypoints[level].size();
 
-    //cout << "nkeypoints: " << nkeypoints << endl;
+    //Mat descriptors;
+    Mat descriptorsTmp; // new, 因为现在一开始没法确定描述子的大小了，所以需要一个新的参数来过渡下
+    descriptorsTmp.create(nkeypoints, 32, CV_8U);
 
+    //_descriptors.create(nkeypoints, 32, CV_8U);
+    //descriptors = _descriptors.getMat();
+
+
+    /*
     if( nkeypoints == 0 )
         _descriptors.release();
     else
@@ -1538,6 +1545,7 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
         _descriptors.create(nkeypoints, 32, CV_8U);
         descriptors = _descriptors.getMat();
     }
+     */
 
     _keypoints.clear();
     _keypoints.reserve(nkeypoints);
@@ -1546,6 +1554,10 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
     for (int level = 0; level < nlevels; ++level)
     {
         vector<KeyPoint>& keypoints = allKeypoints[level];
+        vector<KeyPoint> keypointsDesc; // new add 20230907, 储存原始各个金字塔层的特征点坐标(即未经过尺度恢复的坐标)，用来提取描述子
+        vector<KeyPoint> keypointsTmp; // new add 20230907，用咖喱储存恢复尺度后的特征点坐标
+        //keypointsTmp.resize(allKeypoints[level].size());
+
         int nkeypointsLevel = (int)keypoints.size();
 
         if(nkeypointsLevel==0)
@@ -1555,24 +1567,58 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
         Mat workingMat = mvImagePyramid[level].clone();
         GaussianBlur(workingMat, workingMat, Size(7, 7), 2, 2, BORDER_REFLECT_101);
 
-        // Compute the descriptors
-        Mat desc = descriptors.rowRange(offset, offset + nkeypointsLevel);
-        computeDescriptors(workingMat, keypoints, desc, pattern);
-
-        offset += nkeypointsLevel;
+        //Mat desc = descriptors.rowRange(offset, offset + nkeypointsLevel);
+        //computeDescriptors(workingMat, keypoints, desc, pattern);
 
         // Scale keypoint coordinates
         if (level != 0)
         {
             float scale = mvScaleFactor[level]; //getScale(level, firstLevel, scaleFactor);
-            for (vector<KeyPoint>::iterator keypoint = keypoints.begin(),
-                         keypointEnd = keypoints.end(); keypoint != keypointEnd; ++keypoint)
+            for (vector<KeyPoint>::iterator keypoint = keypoints.begin(), keypointEnd = keypoints.end(); keypoint != keypointEnd; ++keypoint){
+                cv::KeyPoint keypointTmp = *keypoint;
                 keypoint->pt *= scale;
+                int label = imageSemantic.at<char16_t>(keypoint->pt.y,keypoint->pt.x);
+                if(label>=26000 && label<27000)
+                    continue;
+
+                keypointsDesc.push_back(keypointTmp);
+                keypointsTmp.push_back(*keypoint);
+            }
+
+            // Compute the descriptors
+            int nkeypointsLevelDesc = (int)keypointsDesc.size();
+            Mat desc = descriptorsTmp.rowRange(offset, offset + nkeypointsLevelDesc);
+            computeDescriptors(workingMat, keypointsDesc, desc, pattern);
+            offset += nkeypointsLevelDesc;
+        }
+        else{
+            for (vector<KeyPoint>::iterator keypoint = keypoints.begin(), keypointEnd = keypoints.end(); keypoint != keypointEnd; ++keypoint){
+                int label = imageSemantic.at<char16_t>(keypoint->pt.y,keypoint->pt.x);
+                if(label>=26000 && label<27000)
+                    continue;
+
+                keypointsTmp.push_back(*keypoint);
+            }
+            // Compute the descriptors
+            int nkeypointsLevelTmp = (int)keypointsTmp.size();
+            Mat desc = descriptorsTmp.rowRange(offset, offset + nkeypointsLevelTmp);
+            computeDescriptors(workingMat, keypointsTmp, desc, pattern);
+            offset += nkeypointsLevelTmp;
+            //cout << "desc:" << desc.size() << endl;
         }
 
         // And add the keypoints to the output
-        _keypoints.insert(_keypoints.end(), keypoints.begin(), keypoints.end());
+        //_keypoints.insert(_keypoints.end(), keypoints.begin(), keypoints.end());
+        _keypoints.insert(_keypoints.end(), keypointsTmp.begin(), keypointsTmp.end());
     }
+
+    _descriptors.create(_keypoints.size(), 32, CV_8U);
+    Mat descriptors = _descriptors.getMat();
+
+    //descriptorsTmp.copyTo(descriptors.rowRange(0,_keypoints.size()).colRange(0,32));
+    descriptorsTmp.rowRange(0,_keypoints.size()).colRange(0,32).copyTo(descriptors);
+    //descriptors = descriptorsTmp.rowRange(0,_keypoints.size()).colRange(0,32).clone();
+    //cout << "filtering the keypoints：" << _keypoints.size() << "  filtering the descriptors：" << descriptors.size() << endl;
 }
 
 void ORBextractor::ComputePyramid(cv::Mat image)

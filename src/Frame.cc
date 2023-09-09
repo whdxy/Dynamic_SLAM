@@ -133,6 +133,8 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight,  const cv::Mat &imSe
     mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
 
     // ORB extraction
+    //thread threadLeft(&Frame::ExtractORB,this,0,imLeft);
+    //thread threadRight(&Frame::ExtractORB,this,1,imRight);
     thread threadLeft(&Frame::ExtractORBNew,this,0,imLeft,imSemantic);
     thread threadRight(&Frame::ExtractORBNew,this,1,imRight,imSemantic);
     threadLeft.join();
@@ -315,9 +317,9 @@ void Frame::ExtractORB(int flag, const cv::Mat &im)
 void Frame::ExtractORBNew(int flag, const cv::Mat &im, const cv::Mat &imSemantic)
 {
     if(flag==0)
-        (*mpORBextractorLeft)(im,imSemantic, cv::Mat(),mvKeys,mDescriptors);
+        (*mpORBextractorLeft)(im,imSemantic, cv::Mat(),mvKeys,mvKeysDynamic,mDescriptors);
     else
-        (*mpORBextractorRight)(im,imSemantic, cv::Mat(),mvKeysRight,mDescriptorsRight);
+        (*mpORBextractorRight)(im,imSemantic, cv::Mat(),mvKeysRight,mvKeysRightDynamic,mDescriptorsRight);
 }
 
 
@@ -579,6 +581,7 @@ void Frame::ComputeStereoMatches()
 
         const vector<size_t> &vCandidates = vRowIndices[vL];
 
+        //cout << "vCandidates " << iL << ": " << vCandidates.size() << endl;
         if(vCandidates.empty())
             continue;
 
@@ -692,6 +695,16 @@ void Frame::ComputeStereoMatches()
         }
     }
 
+    /*
+    int num_match = N;
+    for(int i=0;i<N;i++)
+    {
+        if(mvDepth[i]==-1)
+            num_match--;
+    }
+    cout << "N1:" << N << " num_match:" << num_match << endl;
+     */
+
     sort(vDistIdx.begin(),vDistIdx.end());
     const float median = vDistIdx[vDistIdx.size()/2].first;
     const float thDist = 1.5f*1.4f*median;
@@ -706,6 +719,16 @@ void Frame::ComputeStereoMatches()
             mvDepth[vDistIdx[i].second]=-1;
         }
     }
+
+    /*
+    num_match = N;
+    for(int i=0;i<N;i++)
+    {
+        if(mvDepth[i]==-1)
+            num_match--;
+    }
+    cout << "N2:" << N << " num_match:" << num_match << endl;
+     */
 }
 
 
