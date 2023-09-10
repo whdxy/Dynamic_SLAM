@@ -144,6 +144,287 @@ cv::Mat FrameDrawer::DrawFrame()
     return imWithInfo;
 }
 
+cv::Mat FrameDrawer::DrawFrameNew()
+{
+    cv::Mat im;
+    vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
+    vector<int> vMatches; // Initialization: correspondeces with reference keypoints
+    vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
+    std::map<int, std::vector<cv::KeyPoint>> vCurrentKeysDynamic; /// new, KeyPointsDynamic in current frame
+    vector<bool> vbVO, vbMap; // Tracked MapPoints in current frame
+    int state; // Tracking state
+
+    //Copy variables within scoped mutex
+    {
+        unique_lock<mutex> lock(mMutex);
+        state=mState;
+        if(mState==Tracking::SYSTEM_NOT_READY)
+            mState=Tracking::NO_IMAGES_YET;
+
+        mIm.copyTo(im);
+
+        if(mState==Tracking::NOT_INITIALIZED)
+        {
+            vCurrentKeys = mvCurrentKeys;
+            vCurrentKeysDynamic=mvCurrentKeysDynamic;
+            vIniKeys = mvIniKeys;
+            vMatches = mvIniMatches;
+        }
+        else if(mState==Tracking::OK)
+        {
+            vCurrentKeys = mvCurrentKeys;
+            vCurrentKeysDynamic=mvCurrentKeysDynamic;
+            vbVO = mvbVO;
+            vbMap = mvbMap;
+        }
+        else if(mState==Tracking::LOST)
+        {
+            vCurrentKeys = mvCurrentKeys;
+            vCurrentKeysDynamic=mvCurrentKeysDynamic;
+        }
+    } // destroy scoped mutex -> release mutex
+
+    if(im.channels()<3) //this should be always true
+        cvtColor(im,im,CV_GRAY2BGR);
+
+    //Draw
+    if(state==Tracking::NOT_INITIALIZED) //INITIALIZING
+    {
+        for(unsigned int i=0; i<vMatches.size(); i++)
+        {
+            if(vMatches[i]>=0)
+            {
+                cv::line(im,vIniKeys[i].pt,vCurrentKeys[vMatches[i]].pt,
+                         cv::Scalar(0,255,0));
+            }
+        }
+    }
+    else if(state==Tracking::OK) //TRACKING
+    {
+        mnTracked=0;
+        mnTrackedVO=0;
+        const float r = 5;
+        const int n = vCurrentKeys.size();
+        for(int i=0;i<n;i++)
+        {
+            if(vbVO[i] || vbMap[i])
+            {
+                cv::Point2f pt1,pt2;
+                pt1.x=vCurrentKeys[i].pt.x-r;
+                pt1.y=vCurrentKeys[i].pt.y-r;
+                pt2.x=vCurrentKeys[i].pt.x+r;
+                pt2.y=vCurrentKeys[i].pt.y+r;
+
+                int classid=vCurrentKeys[i].class_id;
+
+                // This is a match to a MapPoint in the map
+                if(vbMap[i])
+                {
+                    cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
+                    cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
+                    mnTracked++;
+                }
+                else // This is match to a "visual odometry" MapPoint created in the last frame
+                {
+                    cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
+                    cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
+                    mnTrackedVO++;
+                }
+            }
+        }
+
+        for(auto it=vCurrentKeysDynamic.begin(), itend=vCurrentKeysDynamic.end(); it!=itend; it++)
+        {
+            int label = it->first;
+            std::vector<cv::KeyPoint> vkp = it->second;
+            cv::Scalar scalar;
+            ChooseColor(label, scalar);
+            for(auto itkp=vkp.begin(), itendkp=vkp.end(); itkp!=itendkp; itkp++){
+                cv::circle(im,itkp->pt,1,scalar,-1);
+            }
+            //cout << "label: " << label << endl;
+        }
+    }
+    //cout << "---------" << endl;
+
+    // test 20230829
+    /*
+    ostringstream buffer;
+    buffer << "ImageSemantic_keypoints_" << mFrameId << ".png";
+    string imgfile = buffer.str();
+    string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
+    cv::imwrite(imgpath, im);
+    */
+
+    cv::Mat imWithInfo;
+    DrawTextInfo(im,state, imWithInfo);
+
+    return imWithInfo;
+}
+
+/// new add
+void FrameDrawer::ChooseColor(int label, cv::Scalar &scalar){
+    label = label - 26000;
+    while(label>50)
+        label=label/2;
+
+    switch(label)
+    {
+        case 0:
+            scalar = cv::Scalar(255,255,240); //lvory
+            break;
+        case 1:
+            scalar = cv::Scalar(0,0,255); //blue
+            break;
+        case 2:
+            scalar = cv::Scalar(255,0,0); //red
+            break;
+        case 3:
+            scalar = cv::Scalar(255,255,0); // Yellow1
+            break;
+        case 4:
+            scalar = cv::Scalar(47,255,173);
+            break;
+        case 5:
+            scalar = cv::Scalar(128, 0, 128);
+            break;
+        case 6:
+            scalar = cv::Scalar(203,192,255);
+            break;
+        case 7:
+            scalar = cv::Scalar(196,228,255);
+            break;
+        case 8:
+            scalar = cv::Scalar(42,42,165);
+            break;
+        case 9:
+            scalar = cv::Scalar(255,255,255);
+            break;
+        case 10:
+            scalar = cv::Scalar(245,245,245);
+            break;
+        case 11:
+            scalar = cv::Scalar(0,165,255);
+            break;
+        case 12:
+            scalar = cv::Scalar(230,216,173);
+            break;
+        case 13:
+            scalar = cv::Scalar(128,128,128);
+            break;
+        case 14:
+            scalar = cv::Scalar(0,215,255);
+            break;
+        case 15:
+            scalar = cv::Scalar(30,105,210);
+            break;
+        case 16:
+            scalar = cv::Scalar(0,255,0);
+            break;
+        case 17:
+            scalar = cv::Scalar(34, 34, 178);
+            break;
+        case 18:
+            scalar = cv::Scalar(240, 255, 240);
+            break;
+        case 19:
+            scalar = cv::Scalar(250, 206, 135);
+            break;
+        case 20:
+            scalar = cv::Scalar(238, 104, 123);
+            break;
+        case 21:
+            scalar = cv::Scalar(225, 228, 255);
+            break;
+        case 22:
+            scalar = cv::Scalar(128, 0, 0);
+            break;
+        case 23:
+            scalar = cv::Scalar(35, 142, 107);
+            break;
+        case 24:
+            scalar = cv::Scalar(45, 82, 160);
+            break;
+        case 25:
+            scalar = cv::Scalar(0, 255, 127);
+            break;
+        case 26:
+            scalar = cv::Scalar(139, 0, 0);
+            break;
+        case 27:
+            scalar = cv::Scalar(60, 20, 220);
+            break;
+        case 28:
+            scalar = cv::Scalar(0, 0, 139);
+            break;
+        case 29:
+            scalar = cv::Scalar(211, 0, 148);
+            break;
+        case 30:
+            scalar = cv::Scalar(255, 144, 30);
+            break;
+        case 31:
+            scalar = cv::Scalar(105, 105, 105);
+            break;
+        case 32:
+            scalar = cv::Scalar(180, 105, 255);
+            break;
+        case 33:
+            scalar = cv::Scalar(204, 209, 72);
+            break;
+        case 34:
+            scalar = cv::Scalar(173, 222, 255);
+            break;
+        case 35:
+            scalar = cv::Scalar(143, 143, 188);
+            break;
+        case 36:
+            scalar = cv::Scalar(50, 205, 50);
+            break;
+        case 37:
+            scalar = cv::Scalar(34, 34, 178);
+            break;
+        case 38:
+            scalar = cv::Scalar(240, 255, 240);
+            break;
+        case 39:
+            scalar = cv::Scalar(250, 206, 135);
+            break;
+        case 40:
+            scalar = cv::Scalar(238, 104, 123);
+            break;
+        case 41:
+            scalar = cv::Scalar(225, 228, 255);
+            break;
+        case 42:
+            scalar = cv::Scalar(128, 0, 0);
+            break;
+        case 43:
+            scalar = cv::Scalar(35, 142, 107);
+            break;
+        case 44:
+            scalar = cv::Scalar(45, 82, 160);
+            break;
+        case 45:
+            scalar = cv::Scalar(30,105,210);
+            break;
+        case 46:
+            scalar = cv::Scalar(32,178,170);
+            break;
+        case 47:
+            scalar = cv::Scalar(34, 34, 178);
+            break;
+        case 48:
+            scalar = cv::Scalar(240, 255, 240);
+            break;
+        case 49:
+            scalar = cv::Scalar(250, 206, 135);
+            break;
+        case 50:
+            scalar = cv::Scalar(238, 104, 123);
+            break;
+    }
+}
 
 void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 {
@@ -189,6 +470,7 @@ void FrameDrawer::Update(Tracking *pTracker)
     pTracker->mImGray.copyTo(mIm);
     //pTracker->mImGraySemantic.copyTo(mIm); // test 20230901
     mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;
+    mvCurrentKeysDynamic=pTracker->mCurrentFrame.mvKeysDynamic;
     N = mvCurrentKeys.size();
     mvbVO = vector<bool>(N,false);
     mvbMap = vector<bool>(N,false);

@@ -313,7 +313,6 @@ void Frame::ExtractORB(int flag, const cv::Mat &im)
         (*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight);
 }
 
-
 void Frame::ExtractORBNew(int flag, const cv::Mat &im, const cv::Mat &imSemantic)
 {
     if(flag==0)
@@ -321,7 +320,6 @@ void Frame::ExtractORBNew(int flag, const cv::Mat &im, const cv::Mat &imSemantic
     else
         (*mpORBextractorRight)(im,imSemantic, cv::Mat(),mvKeysRight,mvKeysRightDynamic,mDescriptorsRight);
 }
-
 
 void Frame::SetPose(cv::Mat Tcw)
 {
@@ -461,7 +459,6 @@ bool Frame::PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY)
 
     return true;
 }
-
 
 void Frame::ComputeBoW()
 {
@@ -694,17 +691,6 @@ void Frame::ComputeStereoMatches()
             }
         }
     }
-
-    /*
-    int num_match = N;
-    for(int i=0;i<N;i++)
-    {
-        if(mvDepth[i]==-1)
-            num_match--;
-    }
-    cout << "N1:" << N << " num_match:" << num_match << endl;
-     */
-
     sort(vDistIdx.begin(),vDistIdx.end());
     const float median = vDistIdx[vDistIdx.size()/2].first;
     const float thDist = 1.5f*1.4f*median;
@@ -719,18 +705,7 @@ void Frame::ComputeStereoMatches()
             mvDepth[vDistIdx[i].second]=-1;
         }
     }
-
-    /*
-    num_match = N;
-    for(int i=0;i<N;i++)
-    {
-        if(mvDepth[i]==-1)
-            num_match--;
-    }
-    cout << "N2:" << N << " num_match:" << num_match << endl;
-     */
 }
-
 
 void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)
 {

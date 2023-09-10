@@ -146,7 +146,7 @@ void Viewer::Run()
 
         pangolin::FinishFrame();
 
-        cv::Mat im = mpFrameDrawer->DrawFrame();
+        cv::Mat im = mpFrameDrawer->DrawFrameNew();
         cv::imshow("Dynamic-SLAM: Current Frame",im);
         cv::waitKey(mT);
 

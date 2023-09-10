@@ -48,6 +48,10 @@ public:
     // Draw last processed frame.
     cv::Mat DrawFrame();
 
+    cv::Mat DrawFrameNew();
+
+    void ChooseColor(int label, cv::Scalar &scalar);
+
 protected:
 
     void DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText);
@@ -56,6 +60,7 @@ protected:
     cv::Mat mIm;
     int N;
     vector<cv::KeyPoint> mvCurrentKeys;
+    std::map<int, std::vector<cv::KeyPoint>> mvCurrentKeysDynamic;
     vector<bool> mvbMap, mvbVO;
     bool mbOnlyTracking;
     int mnTracked, mnTrackedVO;
