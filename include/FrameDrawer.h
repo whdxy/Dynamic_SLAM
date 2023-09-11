@@ -61,6 +61,7 @@ protected:
     int N;
     vector<cv::KeyPoint> mvCurrentKeys;
     std::map<int, std::vector<cv::KeyPoint>> mvCurrentKeysDynamic;
+    std::map<int, std::vector<float>> mvCurrentDepthDynamic;
     vector<bool> mvbMap, mvbVO;
     bool mbOnlyTracking;
     int mnTracked, mnTrackedVO;

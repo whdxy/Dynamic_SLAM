@@ -151,6 +151,8 @@ cv::Mat FrameDrawer::DrawFrameNew()
     vector<int> vMatches; // Initialization: correspondeces with reference keypoints
     vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
     std::map<int, std::vector<cv::KeyPoint>> vCurrentKeysDynamic; /// new, KeyPointsDynamic in current frame
+    std::map<int, std::vector<float>> vDepthDynamic;
+
     vector<bool> vbVO, vbMap; // Tracked MapPoints in current frame
     int state; // Tracking state
 
@@ -167,6 +169,7 @@ cv::Mat FrameDrawer::DrawFrameNew()
         {
             vCurrentKeys = mvCurrentKeys;
             vCurrentKeysDynamic=mvCurrentKeysDynamic;
+            vDepthDynamic=mvCurrentDepthDynamic;
             vIniKeys = mvIniKeys;
             vMatches = mvIniMatches;
         }
@@ -174,6 +177,7 @@ cv::Mat FrameDrawer::DrawFrameNew()
         {
             vCurrentKeys = mvCurrentKeys;
             vCurrentKeysDynamic=mvCurrentKeysDynamic;
+            vDepthDynamic=mvCurrentDepthDynamic;
             vbVO = mvbVO;
             vbMap = mvbMap;
         }
@@ -181,6 +185,7 @@ cv::Mat FrameDrawer::DrawFrameNew()
         {
             vCurrentKeys = mvCurrentKeys;
             vCurrentKeysDynamic=mvCurrentKeysDynamic;
+            vDepthDynamic=mvCurrentDepthDynamic;
         }
     } // destroy scoped mutex -> release mutex
 
@@ -233,19 +238,25 @@ cv::Mat FrameDrawer::DrawFrameNew()
             }
         }
 
-        for(auto it=vCurrentKeysDynamic.begin(), itend=vCurrentKeysDynamic.end(); it!=itend; it++)
+        auto it=vCurrentKeysDynamic.begin(), itend=vCurrentKeysDynamic.end();
+        auto itdepth=vDepthDynamic.begin(), itenddepth=vDepthDynamic.end();
+        for( ; it!=itend; it++,itdepth++)
         {
             int label = it->first;
             std::vector<cv::KeyPoint> vkp = it->second;
+            std::vector<float> vd = itdepth->second;
             cv::Scalar scalar;
             ChooseColor(label, scalar);
-            for(auto itkp=vkp.begin(), itendkp=vkp.end(); itkp!=itendkp; itkp++){
-                cv::circle(im,itkp->pt,1,scalar,-1);
+            auto itkp=vkp.begin(), itendkp=vkp.end();
+            auto itd=vd.begin(), itendd=vd.end();
+            for( ; itkp!=itendkp; itkp++, itd++){
+                if(*itd > 0)
+                    cv::circle(im,itkp->pt,3,scalar,-1);
             }
-            //cout << "label: " << label << endl;
+            //cout << "label: " << label << "  num:" << vkp.size() << endl;
         }
     }
-    //cout << "---------" << endl;
+    //cout << "fram id: " << mFrameId << "  ---------" << endl;
 
     // test 20230829
     /*
@@ -266,7 +277,7 @@ cv::Mat FrameDrawer::DrawFrameNew()
 void FrameDrawer::ChooseColor(int label, cv::Scalar &scalar){
     label = label - 26000;
     while(label>50)
-        label=label/2;
+        label=label-50;
 
     switch(label)
     {
@@ -301,7 +312,7 @@ void FrameDrawer::ChooseColor(int label, cv::Scalar &scalar){
             scalar = cv::Scalar(255,255,255);
             break;
         case 10:
-            scalar = cv::Scalar(245,245,245);
+            scalar = cv::Scalar(139,101,8); // 245,245,245
             break;
         case 11:
             scalar = cv::Scalar(0,165,255);
@@ -471,6 +482,7 @@ void FrameDrawer::Update(Tracking *pTracker)
     //pTracker->mImGraySemantic.copyTo(mIm); // test 20230901
     mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;
     mvCurrentKeysDynamic=pTracker->mCurrentFrame.mvKeysDynamic;
+    mvCurrentDepthDynamic=pTracker->mCurrentFrame.mvDepthDynamic;
     N = mvCurrentKeys.size();
     mvbVO = vector<bool>(N,false);
     mvbMap = vector<bool>(N,false);

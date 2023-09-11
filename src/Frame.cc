@@ -116,6 +116,8 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     AssignFeaturesToGrid();
 }
 
+
+/// new
 Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight,  const cv::Mat &imSemantic, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
     :mpORBvocabulary(voc),mpORBextractorLeft(extractorLeft),mpORBextractorRight(extractorRight), mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
     mpReferenceKF(static_cast<KeyFrame*>(NULL))
@@ -147,7 +149,8 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight,  const cv::Mat &imSe
 
     UndistortKeyPoints();
 
-    ComputeStereoMatches();
+    //ComputeStereoMatches();
+    ComputeStereoMatchesNew(imLeft, imRight);
 
     mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));
     mvbOutlier = vector<bool>(N,false);
@@ -316,9 +319,9 @@ void Frame::ExtractORB(int flag, const cv::Mat &im)
 void Frame::ExtractORBNew(int flag, const cv::Mat &im, const cv::Mat &imSemantic)
 {
     if(flag==0)
-        (*mpORBextractorLeft)(im,imSemantic, cv::Mat(),mvKeys,mvKeysDynamic,mDescriptors);
+        (*mpORBextractorLeft)(im,imSemantic, cv::Mat(),mvKeys,mvKeysDynamic,mDescriptors,true);
     else
-        (*mpORBextractorRight)(im,imSemantic, cv::Mat(),mvKeysRight,mvKeysRightDynamic,mDescriptorsRight);
+        (*mpORBextractorRight)(im,imSemantic, cv::Mat(),mvKeysRight,mvKeysRightDynamic,mDescriptorsRight,false);
 }
 
 void Frame::SetPose(cv::Mat Tcw)
@@ -705,6 +708,355 @@ void Frame::ComputeStereoMatches()
             mvDepth[vDistIdx[i].second]=-1;
         }
     }
+}
+
+/// new, 新增动态像素点双目匹配计算深度
+void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRight)
+{
+    mvuRight = vector<float>(N,-1.0f);
+    mvDepth = vector<float>(N,-1.0f);
+
+    const int thOrbDist = (ORBmatcher::TH_HIGH+ORBmatcher::TH_LOW)/2;
+
+    const int nRows = mpORBextractorLeft->mvImagePyramid[0].rows;
+
+    //Assign keypoints to row table
+    vector<vector<size_t> > vRowIndices(nRows,vector<size_t>());
+
+    for(int i=0; i<nRows; i++)
+        vRowIndices[i].reserve(200);
+
+    const int Nr = mvKeysRight.size();
+
+    /// 将右目特征点加入备选项
+    /// 第1行：32，45，67
+    /// 第2行：2，4，6,10
+    /// 第i行：...
+    for(int iR=0; iR<Nr; iR++)
+    {
+        const cv::KeyPoint &kp = mvKeysRight[iR];
+        const float &kpY = kp.pt.y;
+        const float r = 2.0f*mvScaleFactors[mvKeysRight[iR].octave];
+        const int maxr = ceil(kpY+r);
+        const int minr = floor(kpY-r);
+
+        for(int yi=minr;yi<=maxr;yi++)
+            vRowIndices[yi].push_back(iR);
+    }
+
+    // Set limits for search
+    const float minZ = mb;
+    const float minD = 0;
+    const float maxD = mbf/minZ;
+
+    // For each left keypoint search a match in the right image
+    vector<pair<int, int> > vDistIdx;
+    vDistIdx.reserve(N);
+
+    for(int iL=0; iL<N; iL++)
+    {
+        /// step1、用描述子作初匹配
+        const cv::KeyPoint &kpL = mvKeys[iL];
+        const int &levelL = kpL.octave;
+        const float &vL = kpL.pt.y;
+        const float &uL = kpL.pt.x;
+
+        const vector<size_t> &vCandidates = vRowIndices[vL];
+
+        if(vCandidates.empty())
+            continue;
+
+        const float minU = uL-maxD;
+        const float maxU = uL-minD;
+
+        if(maxU<0)
+            continue;
+
+        int bestDist = ORBmatcher::TH_HIGH;
+        size_t bestIdxR = 0;
+
+        const cv::Mat &dL = mDescriptors.row(iL);
+
+        // Compare descriptor to right keypoints
+        for(size_t iC=0; iC<vCandidates.size(); iC++)
+        {
+            const size_t iR = vCandidates[iC];
+            const cv::KeyPoint &kpR = mvKeysRight[iR];
+
+            if(kpR.octave<levelL-1 || kpR.octave>levelL+1)
+                continue;
+
+            const float &uR = kpR.pt.x;
+
+            if(uR>=minU && uR<=maxU)
+            {
+                const cv::Mat &dR = mDescriptorsRight.row(iR);
+                const int dist = ORBmatcher::DescriptorDistance(dL,dR);
+
+                if(dist<bestDist)
+                {
+                    bestDist = dist;
+                    bestIdxR = iR;
+                }
+            }
+        }
+
+        /// step1、亚像素修正
+        // Subpixel match by correlation
+        if(bestDist<thOrbDist)
+        {
+            // coordinates in image pyramid at keypoint scale
+            const float uR0 = mvKeysRight[bestIdxR].pt.x;
+            const float scaleFactor = mvInvScaleFactors[kpL.octave];
+            const float scaleduL = round(kpL.pt.x*scaleFactor);
+            const float scaledvL = round(kpL.pt.y*scaleFactor);
+            const float scaleduR0 = round(uR0*scaleFactor);
+
+            // sliding window search
+            const int w = 5;
+            cv::Mat IL = mpORBextractorLeft->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduL-w,scaleduL+w+1);
+            IL.convertTo(IL,CV_32F);
+            IL = IL - IL.at<float>(w,w) *cv::Mat::ones(IL.rows,IL.cols,CV_32F);
+
+            int bestDist = INT_MAX;
+            int bestincR = 0;
+            const int L = 5;
+            vector<float> vDists;
+            vDists.resize(2*L+1);
+
+            const float iniu = scaleduR0+L-w;
+            const float endu = scaleduR0+L+w+1;
+            if(iniu<0 || endu >= mpORBextractorRight->mvImagePyramid[kpL.octave].cols)
+                continue;
+
+            for(int incR=-L; incR<=+L; incR++)
+            {
+                cv::Mat IR = mpORBextractorRight->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduR0+incR-w,scaleduR0+incR+w+1);
+                IR.convertTo(IR,CV_32F);
+                IR = IR - IR.at<float>(w,w) *cv::Mat::ones(IR.rows,IR.cols,CV_32F);
+
+                float dist = cv::norm(IL,IR,cv::NORM_L1);
+                if(dist<bestDist)
+                {
+                    bestDist =  dist;
+                    bestincR = incR;
+                }
+
+                vDists[L+incR] = dist;
+            }
+
+            if(bestincR==-L || bestincR==L)
+                continue;
+
+            // Sub-pixel match (Parabola fitting)
+            const float dist1 = vDists[L+bestincR-1];
+            const float dist2 = vDists[L+bestincR];
+            const float dist3 = vDists[L+bestincR+1];
+
+            const float deltaR = (dist1-dist3)/(2.0f*(dist1+dist3-2.0f*dist2));
+
+            if(deltaR<-1 || deltaR>1)
+                continue;
+
+            // Re-scaled coordinate
+            float bestuR = mvScaleFactors[kpL.octave]*((float)scaleduR0+(float)bestincR+deltaR);
+
+            float disparity = (uL-bestuR);
+
+            if(disparity>=minD && disparity<maxD)
+            {
+                if(disparity<=0)
+                {
+                    disparity=0.01;
+                    bestuR = uL-0.01;
+                }
+                mvDepth[iL]=mbf/disparity;
+                mvuRight[iL] = bestuR;
+                vDistIdx.push_back(pair<int,int>(bestDist,iL));
+            }
+        }
+    }
+    sort(vDistIdx.begin(),vDistIdx.end());
+    const float median = vDistIdx[vDistIdx.size()/2].first;
+    const float thDist = 1.5f*1.4f*median;
+
+    for(int i=vDistIdx.size()-1;i>=0;i--)
+    {
+        if(vDistIdx[i].first<thDist)
+            break;
+        else
+        {
+            mvuRight[vDistIdx[i].second]=-1;
+            mvDepth[vDistIdx[i].second]=-1;
+        }
+    }
+
+    /// 上面是特征点双目匹配计算深度
+    /// -----------------------
+    /// 下面是像素点双目匹配计算深度
+
+    auto itL = mvKeysDynamic.begin();
+    //auto itR = mvKeysRightDynamic.begin();
+    auto itend = mvKeysDynamic.end();
+    const int minNum = 50; // 滤除小于50个像素点的动态物体
+
+    /// 采用SAD
+    /// 首先根据中间的点寻找一个对应点，然后以其为初值作偏差，这样可以减少计算
+    const int r_ = 3; // 卷积核半径
+    const int x_ = 50; // 视察搜索范围x
+    const int y_ = 5; // 视察搜索范围y
+    const int R_ = 2; // 卷积核半径
+    const int X_ = 5; // 视察搜索范围x
+    const int Y_ = 2; // 视察搜索范围y
+    const int threshold_ = 60; //
+
+    const int img_col = imLeft.cols;
+    const int img_row = imLeft.rows;
+    while(itL!=itend){
+        if(itL->second.size()<minNum){
+            itL = mvKeysDynamic.erase(itL);
+            itend = mvKeysDynamic.end();
+            if(itL==itend)
+                break;
+            //cout << "L:" << itL->first-26000 << "," << itL->second.size() << endl;
+        }
+        else{
+            //cout << "L:" << itL->first-26000 << "," << itL->second.size() << endl;
+            int label = itL->first;
+            std::vector<cv::KeyPoint> vkp = itL->second;
+            bool best_init=false;
+            int best_init_x=0;
+            int best_init_y=0;
+            std::vector<float> vDepth;
+            for(auto itkp=vkp.begin(),itkpend=vkp.end();  itkp!=itkpend; itkp++){
+                int xL = itkp->pt.x;
+                int yL = itkp->pt.y;
+
+                //cout << "IL2" << IL << endl;
+                int bestDist = INT_MAX;
+                int uR=0;
+                if(!best_init){ /// 没有较好的初始匹配
+                    if(xL-r_<0 || yL-r_<0 || xL+r_>=img_col || yL+r_>=img_row){
+                        vDepth.push_back(-1.0);
+                        continue;
+                    }
+
+                    cv::Mat IL = imLeft.rowRange(yL-r_, yL+r_).colRange(xL-r_, xL+r_);
+                    //cout << "IL1" << IL << endl;
+                    IL.convertTo(IL,CV_32F);
+                    for(int col=0; col<=x_; col++){
+                        for(int row=-y_; row<=y_; row++){
+                            int xR = xL-col;
+                            int yR = yL-row;
+                            if(xR-r_<0 || yR-r_<0 || xR+r_>=img_col || yR+r_>=img_row)
+                                break;
+
+                            cv::Mat IR = imRight.rowRange(yR-r_, yR+r_).colRange(xR-r_, xR+r_);
+                            //cout << "IR1" << IL << endl;
+                            IR.convertTo(IR,CV_32F);
+                            //cout << "IR2" << IR << endl;
+                            float dist = cv::norm(IL,IR,cv::NORM_L1);
+                            if(dist<bestDist)
+                            {
+                                bestDist = dist;
+                                best_init_x=xL-xR;
+                                best_init_y=yL-yR;
+                                uR = xR;
+                            }
+                        }
+                    }
+                    //cout << "bestDist1:" << bestDist << endl;
+                    if(bestDist<threshold_){
+                        best_init=true;
+                        /// 计算深度
+                        //float bestuR = uR;
+                        //float disparity = (uL-bestuR);
+                        float disparity = (xL-uR);
+
+                        if(disparity>=minD && disparity<maxD)
+                        {
+                            if(disparity<=0)
+                            {
+                                disparity=0.01;
+                                xL = xL-0.01;
+                            }
+                            float d = mbf/disparity;
+                            vDepth.push_back(d);
+                            //mvDepth[iL]=mbf/disparity;
+                            //mvuRight[iL] = bestuR;
+                            //vDistIdx.push_back(pair<int,int>(bestDist,iL));
+                            //cout << "depth:" << mbf/disparity << endl;
+                        }
+                    }
+                    else{
+                        vDepth.push_back(-1.0);
+                    }
+                }
+                else{ ///有了较好的初始匹配
+                    if(xL-R_<0 || yL-R_<0 || xL+R_>=img_col || yL+R_>=img_row){
+                        vDepth.push_back(-1.0);
+                        continue;
+                    }
+                    cv::Mat IL = imLeft.rowRange(yL-R_, yL+R_).colRange(xL-R_, xL+R_);
+                    //cout << "IL1" << IL << endl;
+                    IL.convertTo(IL,CV_32F);
+
+                    for(int col=-X_; col<=X_; col++){
+                        for(int row=-Y_; row<=Y_; row++){
+                            int xR = xL-best_init_x-col;
+                            int yR = yL-best_init_y-row;
+                            if(xR-R_<0 || yR-R_<0 || xR+R_>=img_col || yR+R_>=img_row)
+                                break;
+
+                            cv::Mat IR = imRight.rowRange(yR-R_, yR+R_).colRange(xR-R_, xR+R_);
+                            IR.convertTo(IR,CV_32F);
+                            float dist = cv::norm(IL,IR,cv::NORM_L1);
+                            if(dist<bestDist)
+                            {
+                                bestDist = dist;
+                                uR = xR;
+                            }
+                        }
+                    }
+                    if(bestDist<threshold_){
+                        //best_init=true;
+                        /// 计算深度
+                        //float bestuR = uR;
+                        //float disparity = (uL-bestuR);
+                        float disparity = (xL-uR);
+
+                        if(disparity>=minD && disparity<maxD)
+                        {
+                            if(disparity<=0)
+                            {
+                                disparity=0.01;
+                                xL = xL-0.01;
+                            }
+                            float d = mbf/disparity;
+                            vDepth.push_back(d);
+                            //mvDepth[iL]=mbf/disparity;
+                            //mvuRight[iL] = bestuR;
+                            //vDistIdx.push_back(pair<int,int>(bestDist,iL));
+                            //cout << "depth:" << mbf/disparity << endl;
+                        }
+                    }
+                    else{
+                        vDepth.push_back(-1.0);
+                    }
+                    //cout << "bestDist2:" << bestDist << endl;
+                }
+
+            }
+            //cout << "vkp:" << vkp.size() << " vDepth:" << vDepth.size() << endl;
+            mvDepthDynamic.insert(pair<int, std::vector<float>>(label, vDepth));
+
+            itL++;
+        }
+
+        //cout << "L:" << itL->first-26000 << "," << itL->second.size() << endl;
+    }
+    //cout << "N2:" << mvKeysDynamic.size() << endl;
+    //cout << "fram id: " << mnId << " mvKeysDynamic:" << mvKeysDynamic.size()  << " mvDepthDynamic:" << mvDepthDynamic.size() << endl;
 }
 
 void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)

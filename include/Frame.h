@@ -97,6 +97,8 @@ public:
     // If there is a match, depth is computed and the right coordinate associated to the left keypoint is stored.
     void ComputeStereoMatches();
 
+    void ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRight);
+
     // Associate a "right" coordinate to a keypoint if there is valid depth in the depthmap.
     void ComputeStereoFromRGBD(const cv::Mat &imDepth);
 
@@ -141,14 +143,16 @@ public:
     // In the RGB-D case, RGB images can be distorted.
     std::vector<cv::KeyPoint> mvKeys, mvKeysRight;
     std::vector<cv::KeyPoint> mvKeysUn;
-
-    /// new 储存各个实例类中的特征点
-    std::map<int, std::vector<cv::KeyPoint>> mvKeysDynamic, mvKeysRightDynamic;
-
     // Corresponding stereo coordinate and depth for each keypoint.
     // "Monocular" keypoints have a negative value.
     std::vector<float> mvuRight;
     std::vector<float> mvDepth;
+
+
+    /// new for dynamic
+    std::map<int, std::vector<cv::KeyPoint>> mvKeysDynamic, mvKeysRightDynamic; // 储存各个实例类中的特征点
+    std::map<int, std::vector<float>> mvDepthDynamic;
+
 
     // Bag of Words Vector structures.
     DBoW2::BowVector mBowVec;

@@ -1505,7 +1505,8 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
 
 /// 20230907 新增读取语义图
 void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSemantic, cv::InputArray _mask,
-        std::vector<cv::KeyPoint>& _keypoints, std::map<int, std::vector<cv::KeyPoint>>& _keypoints_dynamic, cv::OutputArray _descriptors)
+        std::vector<cv::KeyPoint>& _keypoints, std::map<int, std::vector<cv::KeyPoint>>& _keypoints_dynamic, cv::OutputArray _descriptors,
+        bool bLeft)
 {
     if(_image.empty())
         return;
@@ -1603,34 +1604,39 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
     /// 上面是对静态区域进行特征点提取
     /// -------------------------
     /// 下面是对动态区域进行像素点提取
-    const int distance = 4;
-    //std::map<int, std::vector<cv::KeyPoint>> mapKeyPoint;
-    for(int i=0; i<imageSemantic.rows; ){
-        for(int j=0; j<imageSemantic.cols; ){
-            int label = imageSemantic.at<char16_t>(i,j);
-            if(label>=26000 && label<27000){
-                auto it=_keypoints_dynamic.find(label);
-                if(it!=_keypoints_dynamic.end()){
-                    cv::KeyPoint kp;
-                    kp.pt.x = j;
-                    kp.pt.y = i;
-                    kp.class_id = label;
-                    it->second.push_back(kp);
+
+    if(bLeft){ /// 因为只有左目的语义图，仅对左目进行像素点提取
+        const int distance = 5;
+        const int bound = 10; // 边界
+        //std::map<int, std::vector<cv::KeyPoint>> mapKeyPoint;
+        for(int i=bound; i<imageSemantic.rows-bound; ){
+            for(int j=bound; j<imageSemantic.cols-bound; ){
+                int label = imageSemantic.at<char16_t>(i,j);
+                if(label>=26000 && label<27000){
+                    auto it=_keypoints_dynamic.find(label);
+                    if(it!=_keypoints_dynamic.end()){
+                        cv::KeyPoint kp;
+                        kp.pt.x = j;
+                        kp.pt.y = i;
+                        kp.class_id = label;
+                        it->second.push_back(kp);
+                    }
+                    else{
+                        cv::KeyPoint kp;
+                        kp.pt.x = j;
+                        kp.pt.y = i;
+                        kp.class_id = label;
+                        std::vector<cv::KeyPoint> vKeyPoint={kp};
+                        _keypoints_dynamic.insert(pair<int, std::vector<cv::KeyPoint>>(label, vKeyPoint));
+                    }
                 }
-                else{
-                    cv::KeyPoint kp;
-                    kp.pt.x = j;
-                    kp.pt.y = i;
-                    kp.class_id = label;
-                    std::vector<cv::KeyPoint> vKeyPoint={kp};
-                    _keypoints_dynamic.insert(pair<int, std::vector<cv::KeyPoint>>(label, vKeyPoint));
-                }
+                j+=distance;
             }
-            j+=distance;
+            i+=distance;
         }
-        i+=distance;
+        //cout << "_keypoints_dynamic:" << _keypoints_dynamic.size() << endl;
     }
-    //cout << "_keypoints_dynamic:" << _keypoints_dynamic.size() << endl;
+
 }
 
 void ORBextractor::ComputePyramid(cv::Mat image)
