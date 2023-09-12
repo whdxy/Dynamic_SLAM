@@ -42,6 +42,7 @@ public:
 
     void AddKeyFrame(KeyFrame* pKF);
     void AddMapPoint(MapPoint* pMP);
+    //void AddMapPointDynamic(int label, ); ///new
     void EraseMapPoint(MapPoint* pMP);
     void EraseKeyFrame(KeyFrame* pKF);
     void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs);
@@ -69,6 +70,7 @@ public:
 protected:
     std::set<MapPoint*> mspMapPoints;
     std::set<KeyFrame*> mspKeyFrames;
+    std::map<int, std::vector<cv::Point3f>> mmMapPointsDynamic; /// new
 
     std::vector<MapPoint*> mvpReferenceMapPoints;
 

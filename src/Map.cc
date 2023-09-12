@@ -43,6 +43,14 @@ void Map::AddMapPoint(MapPoint *pMP)
     mspMapPoints.insert(pMP);
 }
 
+/*
+void Map::AddMapPointDynamic(MapPoint *pMP)
+{
+    unique_lock<mutex> lock(mMutexMap);
+    mspMapPoints.insert(pMP);
+}
+ */
+
 void Map::EraseMapPoint(MapPoint *pMP)
 {
     unique_lock<mutex> lock(mMutexMap);

@@ -150,8 +150,10 @@ public:
 
 
     /// new for dynamic
-    std::map<int, std::vector<cv::KeyPoint>> mvKeysDynamic, mvKeysRightDynamic; // 储存各个实例类中的特征点
-    std::map<int, std::vector<float>> mvDepthDynamic;
+    std::map<int, std::vector<cv::KeyPoint>> mmKeysDynamic, mmKeysRightDynamic; // 储存各个实例类中的像素点
+    std::map<int, std::vector<float>> mmDepthDynamic;  // 储存各个实例类中像素点的深度
+    std::map<int, std::vector<cv::Point2i>> mmBoundaryDynamic;  // 储存各个实例类中像素点的深度
+    std::map<int, std::vector<cv::Point3f>> mmMapPointsDynamic;
 
 
     // Bag of Words Vector structures.
