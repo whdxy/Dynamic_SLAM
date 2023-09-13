@@ -81,6 +81,38 @@ void MapDrawer::DrawMapPoints()
     glEnd();
 }
 
+void MapDrawer::DrawMapPointsDynamic()
+{
+    const map<int, std::vector<cv::Point3f*>> &mpMPsDynamic = mpMap->GetAllMapPointsDynamic();
+
+    if(mpMPsDynamic.empty())
+        return;
+
+    glPointSize(mPointSize*2);
+    glBegin(GL_POINTS);
+
+    auto it=mpMPsDynamic.begin();
+    auto itend=mpMPsDynamic.end();
+    int num=0;
+    for(; it!=itend; it++){
+        int label=it->first;
+        std::vector<cv::Point3f*> vp3f=it->second;
+        cv::Scalar scalar;
+        ChooseColor(label, scalar);
+        float r=scalar[0]/255;
+        float g=scalar[1]/255;
+        float b=scalar[2]/255;
+        glColor3f(r,g,b);
+        //glColor3f(1.0,0.0,0.0);
+        for(int i=0; i<vp3f.size(); i++){
+            cv::Point3f* p3f=vp3f[i];
+            glVertex3f(p3f->x,p3f->y,p3f->z);
+        }
+        //cout << num++ << " " << r << " " << g << " " << b <<  " " << vp3f.size() << endl;
+    }
+    glEnd();
+}
+
 void MapDrawer::DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph)
 {
     const float &w = mKeyFrameSize;
@@ -219,7 +251,6 @@ void MapDrawer::DrawCurrentCamera(pangolin::OpenGlMatrix &Twc)
     glPopMatrix();
 }
 
-
 void MapDrawer::SetCurrentCameraPose(const cv::Mat &Tcw)
 {
     unique_lock<mutex> lock(mMutexCamera);
@@ -260,6 +291,62 @@ void MapDrawer::GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M)
     }
     else
         M.SetIdentity();
+}
+
+void MapDrawer::ChooseColor(int label, cv::Scalar &scalar){
+    while(label>15)
+        label=label-15;
+    switch(label)
+    {
+        case 0:
+            scalar = cv::Scalar(153,51,250);
+            break;
+        case 1:
+            scalar = cv::Scalar(218,112,214);
+            break;
+        case 2:
+            scalar = cv::Scalar(199,97,20);
+            break;
+        case 3:
+            scalar = cv::Scalar(160,82,45);
+            break;
+        case 4:
+            scalar = cv::Scalar(188,143,143);
+            break;
+        case 5:
+            scalar = cv::Scalar(244,164,95);
+            break;
+        case 6:
+            scalar = cv::Scalar(128,42,42);
+            break;
+        case 7:
+            scalar = cv::Scalar(255,128,0);
+            break;
+        case 8:
+            scalar = cv::Scalar(255,215,0);
+            break;
+        case 9:
+            scalar = cv::Scalar(255,245,205);
+            break;
+        case 10:
+            scalar = cv::Scalar(192,192,192);
+            break;
+        case 11:
+            scalar = cv::Scalar(0,199,140);
+            break;
+        case 12:
+            scalar = cv::Scalar(25,25,122);
+            break;
+        case 13:
+            scalar = cv::Scalar(3,168,158);
+            break;
+        case 14:
+            scalar = cv::Scalar(34,139,34);
+            break;
+        case 15:
+            scalar = cv::Scalar(0,255,0);
+            break;
+        }
 }
 
 } //namespace ORB_SLAM

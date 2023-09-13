@@ -27,6 +27,7 @@ namespace ORB_SLAM2
 {
 
 long unsigned int Frame::nNextId=0;
+int Frame::nLabelMin=-1; /// new
 bool Frame::mbInitialComputations=true;
 float Frame::cx, Frame::cy, Frame::fx, Frame::fy, Frame::invfx, Frame::invfy;
 float Frame::mnMinX, Frame::mnMinY, Frame::mnMaxX, Frame::mnMaxY;
@@ -1194,6 +1195,25 @@ cv::Mat Frame::UnprojectStereo(const int &i)
     {
         const float u = mvKeysUn[i].pt.x;
         const float v = mvKeysUn[i].pt.y;
+        const float x = (u-cx)*z*invfx;
+        const float y = (v-cy)*z*invfy;
+        cv::Mat x3Dc = (cv::Mat_<float>(3,1) << x, y, z);
+        return mRwc*x3Dc+mOw;
+    }
+    else
+        return cv::Mat();
+}
+
+cv::Mat Frame::UnprojectStereoDynamic(const int &label, const int &i)
+{
+    const std::vector<cv::KeyPoint> vkp = mmKeysDynamic[label];
+    const std::vector<float> vd=mmDepthDynamic[label];
+    const float z = vd[i];
+
+    if(z>0)
+    {
+        const float u = vkp[i].pt.x;
+        const float v = vkp[i].pt.y;
         const float x = (u-cx)*z*invfx;
         const float y = (v-cy)*z*invfy;
         cv::Mat x3Dc = (cv::Mat_<float>(3,1) << x, y, z);

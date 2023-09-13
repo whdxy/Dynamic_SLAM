@@ -43,13 +43,27 @@ void Map::AddMapPoint(MapPoint *pMP)
     mspMapPoints.insert(pMP);
 }
 
-/*
-void Map::AddMapPointDynamic(MapPoint *pMP)
+
+void Map::AddMapPointDynamic(const int label, std::vector<cv::Point3f*> pMPDynamic) ///new
 {
     unique_lock<mutex> lock(mMutexMap);
-    mspMapPoints.insert(pMP);
+    //mspMapPoints.insert(pMP);
+
+    if(mmMapPointsDynamic.size()==0){
+        //label_min=label;
+        mmMapPointsDynamic.insert(pair<int, std::vector<cv::Point3f*>>(0, pMPDynamic));
+    }
+    else{
+        int Label = label - Frame::nLabelMin;;
+        auto it=mmMapPointsDynamic.find(Label);
+        if(it!=mmMapPointsDynamic.end()){
+            it->second.insert(it->second.end(), pMPDynamic.begin(), pMPDynamic.end());
+        }
+        else{
+            mmMapPointsDynamic.insert(pair<int, std::vector<cv::Point3f*>>(Label, pMPDynamic));
+        }
+    }
 }
- */
 
 void Map::EraseMapPoint(MapPoint *pMP)
 {
@@ -97,6 +111,12 @@ vector<MapPoint*> Map::GetAllMapPoints()
 {
     unique_lock<mutex> lock(mMutexMap);
     return vector<MapPoint*>(mspMapPoints.begin(),mspMapPoints.end());
+}
+
+std::map<int, std::vector<cv::Point3f*>> Map::GetAllMapPointsDynamic()
+{
+    unique_lock<mutex> lock(mMutexMap);
+    return mmMapPointsDynamic;
 }
 
 long unsigned int Map::MapPointsInMap()

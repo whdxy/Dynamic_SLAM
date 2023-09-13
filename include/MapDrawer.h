@@ -40,11 +40,14 @@ public:
     Map* mpMap;
 
     void DrawMapPoints();
+    void DrawMapPointsDynamic();
     void DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph);
     void DrawCurrentCamera(pangolin::OpenGlMatrix &Twc);
     void SetCurrentCameraPose(const cv::Mat &Tcw);
     void SetReferenceKeyFrame(KeyFrame *pKF);
     void GetCurrentOpenGLCameraMatrix(pangolin::OpenGlMatrix &M);
+
+    void ChooseColor(int label, cv::Scalar &scalar);
 
 private:
 

@@ -28,6 +28,7 @@
 
 namespace ORB_SLAM2
 {
+//int FrameDrawer::nLabelMin=-1; /// new
 
 FrameDrawer::FrameDrawer(Map* pMap):mpMap(pMap)
 {
@@ -300,7 +301,64 @@ cv::Mat FrameDrawer::DrawFrameNew()
 
 /// new add
 void FrameDrawer::ChooseColor(int label, cv::Scalar &scalar){
-    label = label - 26000;
+    label = label - Frame::nLabelMin;
+    //cout << "label:" << label << endl;
+    while(label>15)
+        label=label-15;
+
+    switch(label)
+    {
+        case 0:
+            scalar = cv::Scalar(250,51,153); //BGR
+            break;
+        case 1:
+            scalar = cv::Scalar(214,112,218);
+            break;
+        case 2:
+            scalar = cv::Scalar(20,97,199);
+            break;
+        case 3:
+            scalar = cv::Scalar(45,82,160);
+            break;
+        case 4:
+            scalar = cv::Scalar(143,143,188);
+            break;
+        case 5:
+            scalar = cv::Scalar(95,164,244);
+            break;
+        case 6:
+            scalar = cv::Scalar(42,42,128);
+            break;
+        case 7:
+            scalar = cv::Scalar(0,128,255);
+            break;
+        case 8:
+            scalar = cv::Scalar(0,215,255);
+            break;
+        case 9:
+            scalar = cv::Scalar(205,245,255);
+            break;
+        case 10:
+            scalar = cv::Scalar(192,192,192);
+            break;
+        case 11:
+            scalar = cv::Scalar(140,199,0);
+            break;
+        case 12:
+            scalar = cv::Scalar(122,25,25);
+            break;
+        case 13:
+            scalar = cv::Scalar(158,168,3);
+            break;
+        case 14:
+            scalar = cv::Scalar(34,139,34);
+            break;
+        case 15:
+            scalar = cv::Scalar(0,255,0);
+            break;
+    }
+
+    /*
     while(label>50)
         label=label-50;
 
@@ -460,6 +518,7 @@ void FrameDrawer::ChooseColor(int label, cv::Scalar &scalar){
             scalar = cv::Scalar(238, 104, 123);
             break;
     }
+     */
 }
 
 void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
@@ -503,6 +562,10 @@ void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 void FrameDrawer::Update(Tracking *pTracker)
 {
     unique_lock<mutex> lock(mMutex);
+
+    //if(nLabelMin==-1)
+    //    nLabelMin=pTracker->mCurrentFrame.nLabelMin;
+
     pTracker->mImGray.copyTo(mIm);
     //pTracker->mImGraySemantic.copyTo(mIm); // test 20230901
     mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;

@@ -105,6 +105,8 @@ public:
     // Backprojects a keypoint (if stereo/depth info available) into 3D world coordinates.
     cv::Mat UnprojectStereo(const int &i);
 
+    cv::Mat UnprojectStereoDynamic(const int &label, const int &i);
+
 public:
     // Vocabulary used for relocalization.
     ORBVocabulary* mpORBvocabulary;
@@ -153,7 +155,8 @@ public:
     std::map<int, std::vector<cv::KeyPoint>> mmKeysDynamic, mmKeysRightDynamic; // 储存各个实例类中的像素点
     std::map<int, std::vector<float>> mmDepthDynamic;  // 储存各个实例类中像素点的深度
     std::map<int, std::vector<cv::Point2i>> mmBoundaryDynamic;  // 储存各个实例类中像素点的深度
-    std::map<int, std::vector<cv::Point3f>> mmMapPointsDynamic;
+    std::map<int, std::vector<cv::Point3f*>> mmMapPointsDynamic;
+    static int nLabelMin; /// new 标记最小标签id
 
 
     // Bag of Words Vector structures.
