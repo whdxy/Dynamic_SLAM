@@ -154,9 +154,12 @@ public:
     /// new for dynamic
     std::map<int, std::vector<cv::KeyPoint>> mmKeysDynamic, mmKeysRightDynamic; // 储存各个实例类中的像素点
     std::map<int, std::vector<float>> mmDepthDynamic;  // 储存各个实例类中像素点的深度
-    std::map<int, std::vector<cv::Point2i>> mmBoundaryDynamic;  // 储存各个实例类中像素点的深度
+    //std::map<int, std::vector<cv::Point2i>> mmBoundaryDynamic;  // 储存各个实例类中像素点的深度
     std::map<int, std::vector<cv::Point3f*>> mmMapPointsDynamic;
     static int nLabelMin; /// new 标记最小标签id
+    std::map<int, std::map<int, std::vector<int>>> mmPixelsDynamic; // label->行数->列数
+    std::map<int, std::vector<int>> mmBoundaryDynamic; // label->行数->列数
+    //std::map<int, int> mNDynamic; // label | Numeber
 
 
     // Bag of Words Vector structures.

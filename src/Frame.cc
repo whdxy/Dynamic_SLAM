@@ -320,9 +320,9 @@ void Frame::ExtractORB(int flag, const cv::Mat &im)
 void Frame::ExtractORBNew(int flag, const cv::Mat &im, const cv::Mat &imSemantic)
 {
     if(flag==0)
-        (*mpORBextractorLeft)(im,imSemantic, cv::Mat(),mvKeys,mmKeysDynamic,mDescriptors,true);
+        (*mpORBextractorLeft)(im,imSemantic,mvKeys,mmKeysDynamic,mDescriptors,mmPixelsDynamic,mmBoundaryDynamic,true);
     else
-        (*mpORBextractorRight)(im,imSemantic, cv::Mat(),mvKeysRight,mmKeysRightDynamic,mDescriptorsRight,false);
+        (*mpORBextractorRight)(im,imSemantic,mvKeysRight,mmKeysRightDynamic,mDescriptorsRight,mmPixelsDynamic,mmBoundaryDynamic,false);
 }
 
 void Frame::SetPose(cv::Mat Tcw)
@@ -895,14 +895,124 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
     /// 上面是特征点双目匹配计算深度
     /// -----------------------
     /// 下面是像素点双目匹配计算深度
+    const int L = 3; // 车辆深度半径
+    const int w = 5;
+    auto itPixels=mmPixelsDynamic.begin(), itPixelsend=mmPixelsDynamic.end();
+    while(itPixels!=itPixelsend){
+        int label=itPixels->first;
+        const std::map<int, std::vector<int>>& m=itPixels->second;
+        std::vector<int>& boundary = mmBoundaryDynamic[label];
+        boundary.push_back(m.begin()->first);
+        boundary.push_back((--m.end())->first);
+        const int maskRows=boundary[3]-boundary[2];
+        const int maskCols=boundary[1]-boundary[0];
+        //cout << "uMin:" << boundary[0] << " uMax" << boundary[1] << " vMin:" << boundary[2] << " vMax" << boundary[3] << endl;
+        //cout << "maskRows:" << maskRows << " maskCols" << maskCols << endl;
 
+        if(maskRows<30 || maskCols <50){
+            mmBoundaryDynamic.erase(mmBoundaryDynamic.find(label));
+            itPixels = mmPixelsDynamic.erase(itPixels);
+            itPixelsend = mmPixelsDynamic.end();
+            if(itPixels==itPixelsend)
+                break;
+        }
+        else{
+            /// 1、整体匹配，求最佳偏移
+            int bestdistMatch=INT_MAX;
+            int bestUoffset=0;
+            const int colStep=3;
+            for(int i=0; i<boundary[0]; ){ // uMin左移动，v不变
+                int dist=0;
+                auto itm=m.begin(), itmend=m.end();
+                for(; itm!=itmend; itm++){
+                    int row=itm->first;
+                    const vector<int>& vcol=itm->second;
+                    for(int j=0; j<vcol.size(); j++){
+                        if(vcol[j]-i>0)
+                            dist+=abs(imRight.at<uchar>(row,vcol[j]-i)-imLeft.at<uchar>(row,vcol[j]));
+                    }
+                }
+
+                if(bestdistMatch>dist){
+                    bestdistMatch=dist;
+                    bestUoffset=i;
+                }
+                i+=colStep;
+            }
+
+            //cv::Mat mask=imRight.rowRange(boundary[2],boundary[3]).colRange(boundary[0]-bestUoffset,boundary[1]-bestUoffset);
+            //cv::imshow("mask", mask);
+            //cv::waitKey(0);
+            //cout << "uMin:" << boundary[0] << " uMax" << boundary[1] << " vMin:" << boundary[2] << " vMax" << boundary[3] << endl;
+            //cout << "label:" << label << " bestdistMatch:" << bestdistMatch << " bestUoffset:" << bestUoffset << " uMin:" << boundary[0] << " uMax" << boundary[1] << " vMin:" << boundary[2] << " vMax" << boundary[3] << endl;
+            cout << "label:" << label << " bestdistMatch:" << bestdistMatch << " bestUoffset:" << bestUoffset << endl;
+
+            const int L = 3;
+            const int w = 5;
+            const float depthIniti = mbf/bestUoffset; /// 根据最佳偏移，计算最小和最大偏移
+            const int maxUoffset = ceil(mbf/(depthIniti-L));
+            const int minUoffset = floor(mbf/(depthIniti+L));
+
+            auto itm=m.begin(), itmend=m.end();
+            for(;itm!=itmend;itm++){ // 遍历像素点
+                int rowL = itm->first;
+                vector<int> v=itm->second;
+                for(int i=0; i<v.size(); i++){
+                    int colL=v[i];
+
+                    if(rowL-w<0 || rowL+w>imLeft.rows || colL-w<0 || colL+w>imLeft.cols)
+                        continue;
+
+                    int bestDist=INT_MAX;
+                    int bestURoffset=0;
+                    //int bestDist=INT_MAX;
+                    cv::Mat IL = imLeft.rowRange(rowL-w,rowL+w).colRange(colL-w, colL+w);
+                    IL.convertTo(IL,CV_32F);
+                    IL = IL - IL.at<float>(w,w) * cv::Mat::ones(IL.rows,IL.cols,CV_32F);
+                    //cout << IL << endl;
+
+                    for(int j=minUoffset; j<=maxUoffset; j++){
+
+                        if(colL-w-j<0)
+                            continue;
+
+                        cv::Mat IR = imRight.rowRange(rowL-w,rowL+w).colRange(colL-w-j, colL+w-j);
+                        IR.convertTo(IR,CV_32F);
+                        IR = IR - IR.at<float>(w,w) * cv::Mat::ones(IR.rows,IR.cols,CV_32F);
+                        //cout << IR << endl;
+
+                        float dist = cv::norm(IL,IR,cv::NORM_L1);
+                        //cout << "dist:" << dist << endl;
+                        if(dist<bestDist)
+                        {
+                            bestDist = dist;
+                            bestURoffset = j;
+                        }
+                    }
+                    if(bestURoffset>=minD && bestURoffset<maxD)
+                    {
+                        if(bestURoffset<=0)
+                        {
+
+                        }
+                        float d = mbf/bestURoffset;
+                        //vDepth.push_back(d);
+                    }
+                    //cout << "   bestURoffset:" << bestURoffset << " d:" << (float)mbf/bestURoffset << endl;
+                }
+            }
+
+
+            itPixels++;
+        }
+    }
+
+    ///=================================================================
     auto itL = mmKeysDynamic.begin();
     //auto itR = mvKeysRightDynamic.begin();
     auto itend = mmKeysDynamic.end();
     const int minNum = 50; // 滤除小于50个像素点的动态物体
-    //if(mmKeysDynamic.size()==0)
-    //    cout << "==============" << endl;
-    //cout << "============== " << mmKeysDynamic.size() << " ==============" << endl;
+
 
     bool boptial = false;
     /// 采用光流
@@ -983,7 +1093,7 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
                 std::vector<cv::Point2i> vBoundary;
                 vBoundary.push_back(cv::Point2i(min_v, min_u));
                 vBoundary.push_back(cv::Point2i(max_v, max_u));
-                mmBoundaryDynamic.insert(pair<int, std::vector<cv::Point2i>>(label, vBoundary));
+                //mmBoundaryDynamic.insert(pair<int, std::vector<cv::Point2i>>(label, vBoundary));
                 //cout << "max_u" << max_u << " min_u" << min_u << " max_v" << max_v << " min_v" << min_v<< endl;
                 itL++;
             }
@@ -993,13 +1103,15 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
     else{
         /// 采用SAD
         /// 首先根据中间的点寻找一个对应点，然后以其为初值作偏差，这样可以减少计算
+        // 无初始值参数
         const int r_ = 3; // 卷积核半径
-        const int x_ = 50; // 视察搜索范围x
+        const int x_ = 70; // 视察搜索范围x
         const int y_ = 5; // 视察搜索范围y
+        // 有初始值参数
         const int R_ = 2; // 卷积核半径
         const int X_ = 5; // 视察搜索范围x
         const int Y_ = 2; // 视察搜索范围y
-        const int threshold_ = 60; //
+        const int threshold_ = 50; //
         const int img_col = imLeft.cols;
         const int img_row = imLeft.rows;
 
@@ -1009,10 +1121,8 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
                 itend = mmKeysDynamic.end();
                 if(itL==itend)
                     break;
-                //cout << "L:" << itL->first-26000 << "," << itL->second.size() << endl;
             }
             else{
-                //cout << "L:" << itL->first-26000 << "," << itL->second.size() << endl;
                 int label = itL->first;
                 std::vector<cv::KeyPoint> vkp = itL->second;
                 bool best_init=false;
@@ -1022,7 +1132,10 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
                 //std::vector<cv::Point2i> vBoundary;
                 int max_u=-1, max_v=-1;
                 int min_u=INT_MAX, min_v=INT_MAX;
+
+                const int w = 5;
                 for(auto itkp=vkp.begin(),itkpend=vkp.end();  itkp!=itkpend; itkp++){
+
                     int xL = itkp->pt.x;
                     int yL = itkp->pt.y;
                     if(yL>max_u)
@@ -1044,8 +1157,9 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
                         }
 
                         cv::Mat IL = imLeft.rowRange(yL-r_, yL+r_).colRange(xL-r_, xL+r_);
-                        //cout << "IL1" << IL << endl;
                         IL.convertTo(IL,CV_32F);
+                        IL = IL - IL.at<float>(r_,r_) * cv::Mat::ones(IL.rows,IL.cols,CV_32F);
+
                         for(int col=0; col<=x_; col++){
                             for(int row=-y_; row<=y_; row++){
                                 int xR = xL-col;
@@ -1054,8 +1168,9 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
                                     break;
 
                                 cv::Mat IR = imRight.rowRange(yR-r_, yR+r_).colRange(xR-r_, xR+r_);
-                                //cout << "IR1" << IL << endl;
                                 IR.convertTo(IR,CV_32F);
+                                IR = IR - IR.at<float>(r_,r_) * cv::Mat::ones(IR.rows,IR.cols,CV_32F);
+
                                 //cout << "IR2" << IR << endl;
                                 float dist = cv::norm(IL,IR,cv::NORM_L1);
                                 if(dist<bestDist)
@@ -1100,8 +1215,9 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
                             continue;
                         }
                         cv::Mat IL = imLeft.rowRange(yL-R_, yL+R_).colRange(xL-R_, xL+R_);
-                        //cout << "IL1" << IL << endl;
                         IL.convertTo(IL,CV_32F);
+                        IL = IL - IL.at<float>(R_,R_) * cv::Mat::ones(IL.rows,IL.cols,CV_32F);
+
 
                         for(int col=-X_; col<=X_; col++){
                             for(int row=-Y_; row<=Y_; row++){
@@ -1112,6 +1228,8 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
 
                                 cv::Mat IR = imRight.rowRange(yR-R_, yR+R_).colRange(xR-R_, xR+R_);
                                 IR.convertTo(IR,CV_32F);
+                                IR = IR - IR.at<float>(R_,R_) * cv::Mat::ones(IR.rows,IR.cols,CV_32F);
+
                                 float dist = cv::norm(IL,IR,cv::NORM_L1);
                                 if(dist<bestDist)
                                 {
@@ -1140,6 +1258,7 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
                                 //mvuRight[iL] = bestuR;
                                 //vDistIdx.push_back(pair<int,int>(bestDist,iL));
                                 //cout << "depth:" << mbf/disparity << endl;
+                                //cout << "mbf:" << mbf << endl;
                             }
                         }
                         else{
@@ -1154,7 +1273,7 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
                 std::vector<cv::Point2i> vBoundary;
                 vBoundary.push_back(cv::Point2i(min_v, min_u));
                 vBoundary.push_back(cv::Point2i(max_v, max_u));
-                mmBoundaryDynamic.insert(pair<int, std::vector<cv::Point2i>>(label, vBoundary));
+                //mmBoundaryDynamic.insert(pair<int, std::vector<cv::Point2i>>(label, vBoundary));
                 //cout << "max_u" << max_u << " min_u" << min_u << " max_v" << max_v << " min_v" << min_v<< endl;
                 itL++;
             }

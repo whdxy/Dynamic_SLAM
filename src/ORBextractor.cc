@@ -1504,9 +1504,10 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
 }
 
 /// 20230907 新增读取语义图
-void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSemantic, cv::InputArray _mask,
-        std::vector<cv::KeyPoint>& _keypoints, std::map<int, std::vector<cv::KeyPoint>>& _keypoints_dynamic, cv::OutputArray _descriptors,
-        bool bLeft)
+void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSemantic,
+                               std::vector<cv::KeyPoint>& _keypoints, std::map<int, std::vector<cv::KeyPoint>>& _keypoints_dynamic,
+                               cv::OutputArray _descriptors, std::map<int, std::map<int, std::vector<int>>>& _pixels, std::map<int, std::vector<int>>& _colrange,
+                               bool bLeft)
 {
     if(_image.empty())
         return;
@@ -1635,8 +1636,92 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
             i+=distance;
         }
         //cout << "_keypoints_dynamic:" << _keypoints_dynamic.size() << endl;
-    }
 
+        /// ============================================
+        /// 求掩码并提取像素点(掩码->特征点)
+        //std::map<int, std::map<int, std::vector<int>>> mKeysDynamic; // label->行数->列数
+        //std::map<int, std::vector<int>> mUrange; // label->行数->列数
+        int uMin=INT_MAX, uMax=-1;
+        const int rowStep=3;
+        const int colStep=6;
+        for(int i=0; i<imageSemantic.rows;){
+            for(int j=0; j<imageSemantic.cols; ){
+                int label=imageSemantic.at<char16_t>(i,j);
+                if(label>=26000 && label<27000){
+                    if(imageSemantic.at<char16_t>(i,j)==label && imageSemantic.at<char16_t>(i,j+1)==label
+                       && imageSemantic.at<char16_t>(i,j+2)==label&& imageSemantic.at<char16_t>(i,j+3)==label
+                       && imageSemantic.at<char16_t>(i,j+4)==label && imageSemantic.at<char16_t>(i,j+5)==label){
+
+                        auto it=_pixels.find(label);
+                        if(it!=_pixels.end()){
+                            std::map<int, std::vector<int>>& m=it->second;
+                            auto itm=m.find(i);
+                            if(itm!=m.end())
+                                itm->second.push_back(j);
+                            else{
+                                m.insert(pair<int, std::vector<int>>(i,{j}));
+                                //cout << "label:" << label << " i:" << i << endl;
+                            }
+
+                            std::vector<int>& vUrange = _colrange[label];
+                            if(vUrange[0]>j)
+                                vUrange[0]=j;
+                            else if(vUrange[1]<j+6)
+                                vUrange[1]=j;
+                        }
+                        else{
+                            std::map<int, std::vector<int>> m={{i,std::vector<int>{j}}};
+                            _pixels.insert(pair<int, std::map<int, std::vector<int>>>(label,{{i,{j}}}));
+
+                            _colrange.insert(pair<int, std::vector<int>>(label,{j,j}));
+                            //cout << "label:" << label << " i:" << i << endl;
+                        }
+
+                    }
+                }
+                j+=colStep;
+            }
+            //cout << v.size() << endl;
+            //if(v.size()!=0)
+            //    m.insert(pair<int,vector<int>>(i,v));
+
+            i+=rowStep;
+        }
+        /// 打印信息
+
+        //cout << "mKeysDynamic:" << _pixels.size() << endl;
+        /*
+        auto it=_pixels.begin(), itend=_pixels.end();
+        for(; it!=itend; it++){
+            int label=it->first;
+            std::map<int, std::vector<int>> m=it->second;
+            cout << "label:" << label << " m:" << m.size() << endl;
+            auto itm=m.begin(),itmend=m.end();
+            cout << " v:";
+            for(; itm!=itmend; itm++){
+                cout << " v:"  << itm->first << " | ";
+                std::vector<int> v=itm->second;
+                for(int i=0; i<v.size(); i++){
+                    cout << v[i] << ", ";
+                }
+                cout << endl;
+            }
+
+            cout << endl;
+        }
+         */
+
+
+        /*
+        auto it=_colrange.begin(), itend=_colrange.end();
+        for(; it!=itend; it++){
+            int label=it->first;
+            std::vector<int> v=it->second;
+            cout << "label:" << label << " umin:" << v[0] << " umax:" << v[1] << endl;
+        }
+         */
+
+    }
 }
 
 void ORBextractor::ComputePyramid(cv::Mat image)

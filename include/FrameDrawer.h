@@ -64,7 +64,7 @@ protected:
     vector<cv::KeyPoint> mvCurrentKeys;
     std::map<int, std::vector<cv::KeyPoint>> mmCurrentKeysDynamic;
     std::map<int, std::vector<float>> mmCurrentDepthDynamic;
-    std::map<int, std::vector<cv::Point2i>> mmCurrentBoundaryDynamic;
+    std::map<int, std::vector<int>> mmCurrentBoundaryDynamic;
     //static int nLabelMin; /// new 标记最小标签id
 
     vector<bool> mvbMap, mvbVO;

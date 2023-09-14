@@ -153,7 +153,7 @@ cv::Mat FrameDrawer::DrawFrameNew()
     vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
     std::map<int, std::vector<cv::KeyPoint>> mCurrentKeysDynamic; /// new, KeyPointsDynamic in current frame
     std::map<int, std::vector<float>> mDepthDynamic;
-    std::map<int, std::vector<cv::Point2i>> mBoundaryDynamic;
+    std::map<int, std::vector<int>> mBoundaryDynamic;
 
     vector<bool> vbVO, vbMap; // Tracked MapPoints in current frame
     int state; // Tracking state
@@ -280,10 +280,13 @@ cv::Mat FrameDrawer::DrawFrameNew()
 
     for(auto itBoundary=mBoundaryDynamic.begin(), itBoundaryend=mBoundaryDynamic.end() ; itBoundary!=itBoundaryend; itBoundary++)
     {
-        //int label = itBoundaryend->first;
-        //std::vector<cv::Point2i> vp = itBoundary->second;
-        cv::Point2i p1=itBoundary->second[0];
-        cv::Point2i p2=itBoundary->second[1];
+        cv::Point2i p1,p2;
+
+        p1.x=itBoundary->second[0];
+        p1.y=itBoundary->second[2];
+        p2.x=itBoundary->second[1];
+        p2.y=itBoundary->second[3];
+
         cv::rectangle(imDynamic, p1, p2, cv::Scalar(0,255,0), 2);
     }
 
