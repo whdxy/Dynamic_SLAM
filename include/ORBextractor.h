@@ -64,9 +64,8 @@ public:
 
     /// 20230907 新增读取语义图
     void operator()( cv::InputArray image, cv::InputArray imageSemantic,
-                     std::vector<cv::KeyPoint>& keypoints, std::map<int, std::vector<cv::KeyPoint>>& keypoints_dynamic,
-                     cv::OutputArray descriptors, std::map<int, std::map<int, std::vector<int>>>& pixels, std::map<int, std::vector<int>>& colrange,
-                     bool bLeft);
+                     std::vector<cv::KeyPoint>& keypoints, cv::OutputArray descriptors, std::map<int, std::map<int, std::vector<int>>>& pixels,
+                     std::map<int, std::vector<int>>& colrange, std::map<int, std::vector<int>>& pixelsnum, bool bLeft);
 
 
     int inline GetLevels(){

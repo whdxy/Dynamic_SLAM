@@ -151,9 +151,11 @@ cv::Mat FrameDrawer::DrawFrameNew()
     vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
     vector<int> vMatches; // Initialization: correspondeces with reference keypoints
     vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
-    std::map<int, std::vector<cv::KeyPoint>> mCurrentKeysDynamic; /// new, KeyPointsDynamic in current frame
-    std::map<int, std::vector<float>> mDepthDynamic;
-    std::map<int, std::vector<int>> mBoundaryDynamic;
+    //std::map<int, std::vector<cv::KeyPoint>> mCurrentKeysDynamic; /// new, KeyPointsDynamic in current frame
+    std::map<int, std::map<int, std::vector<int>>> mCurrentPixelsDynamic;
+    std::map<int, std::vector<float>> mCurrentDepthDynamic;
+    std::map<int, std::vector<int>> mCurrentBoundaryDynamic;
+    std::map<int, std::vector<int>> mCurrentPixelsDynamicN;
 
     vector<bool> vbVO, vbMap; // Tracked MapPoints in current frame
     int state; // Tracking state
@@ -171,27 +173,32 @@ cv::Mat FrameDrawer::DrawFrameNew()
         if(mState==Tracking::NOT_INITIALIZED)
         {
             vCurrentKeys = mvCurrentKeys;
-            mCurrentKeysDynamic=mmCurrentKeysDynamic;
-            mDepthDynamic=mmCurrentDepthDynamic;
-            mBoundaryDynamic=mmCurrentBoundaryDynamic;
+            mCurrentPixelsDynamic=mmCurrentPixelsDynamic;
+            mCurrentDepthDynamic=mmCurrentDepthDynamic;
+            mCurrentBoundaryDynamic=mmCurrentBoundaryDynamic;
+            mCurrentPixelsDynamicN=mmCurrentPixelsDynamicN;
+
             vIniKeys = mvIniKeys;
             vMatches = mvIniMatches;
         }
         else if(mState==Tracking::OK)
         {
             vCurrentKeys = mvCurrentKeys;
-            mCurrentKeysDynamic=mmCurrentKeysDynamic;
-            mDepthDynamic=mmCurrentDepthDynamic;
-            mBoundaryDynamic=mmCurrentBoundaryDynamic;
+            mCurrentPixelsDynamic=mmCurrentPixelsDynamic;
+            mCurrentDepthDynamic=mmCurrentDepthDynamic;
+            mCurrentBoundaryDynamic=mmCurrentBoundaryDynamic;
+            mCurrentPixelsDynamicN=mmCurrentPixelsDynamicN;
+
             vbVO = mvbVO;
             vbMap = mvbMap;
         }
         else if(mState==Tracking::LOST)
         {
             vCurrentKeys = mvCurrentKeys;
-            mCurrentKeysDynamic=mmCurrentKeysDynamic;
-            mDepthDynamic=mmCurrentDepthDynamic;
-            mBoundaryDynamic=mmCurrentBoundaryDynamic;
+            mCurrentPixelsDynamic=mmCurrentPixelsDynamic;
+            mCurrentDepthDynamic=mmCurrentDepthDynamic;
+            mCurrentBoundaryDynamic=mmCurrentBoundaryDynamic;
+            mCurrentPixelsDynamicN=mmCurrentPixelsDynamicN;
         }
     } // destroy scoped mutex -> release mutex
 
@@ -246,23 +253,85 @@ cv::Mat FrameDrawer::DrawFrameNew()
             }
         }
 
-        auto it=mCurrentKeysDynamic.begin(), itend=mCurrentKeysDynamic.end();
-        auto itdepth=mDepthDynamic.begin(), itenddepth=mDepthDynamic.end();
-        for( ; it!=itend; it++,itdepth++)
-        {
-            int label = it->first;
-            std::vector<cv::KeyPoint> vkp = it->second;
-            std::vector<float> vd = itdepth->second;
+        /// -------------------
+        auto itPixelsDynamic=mCurrentPixelsDynamic.begin(), itPixelsDynamicend=mCurrentPixelsDynamic.end();
+        //auto itDepthDynamic=mCurrentFrame.mmDepthDynamic.begin();
+        while(itPixelsDynamic!=itPixelsDynamicend){
+            int label = itPixelsDynamic->first;
+            std::map<int, std::vector<int>> m = itPixelsDynamic->second;
+            std::vector<float> vd = mCurrentDepthDynamic[label];
+            std::vector<int> vN = mCurrentPixelsDynamicN[label];
+
+            auto itm=m.begin(), itmend=m.end();
+            int rowInit=itm->first;
+
             cv::Scalar scalar;
             ChooseColor(label, scalar);
-            auto itkp=vkp.begin(), itendkp=vkp.end();
-            auto itd=vd.begin(), itendd=vd.end();
-            for( ; itkp!=itendkp; itkp++, itd++){
-                if(*itd > 0)
-                    cv::circle(im,itkp->pt,3,scalar,-1);
+
+            int num=0;
+            for(; itm!=itmend; itm++){
+                //cout << "   itPixelsDynamic:" << itm->second.size() << " vd:" << vd.size() << " vN:" << vN[num++] << endl;
+                int row=itm->first;
+                std::vector<int> vcol=itm->second;
+                for(int i=0; i<vcol.size(); i++){
+                    float d=vd[vN[num]+i];
+                    if(d>0){
+                        cv::Point2f pt;
+                        pt.x=vcol[i];
+                        pt.y=row;
+                        cout << "vcol[i]:" << vcol[i] << " row:" << row << endl;
+                        cout << "pt.x:" << pt.x << " pt.y:" << pt.y << endl;
+                        //cv::circle(im,pt,3,scalar,-1);
+                    }
+                }
+
+                //cout << endl;
+                num++;
             }
-            //cout << "label: " << label << "  num:" << vkp.size() << endl;
+
+            itPixelsDynamic++;
         }
+
+        /// ==============================
+        /*
+        auto it=mCurrentPixelsDynamic.begin(), itend=mCurrentPixelsDynamic.end();
+        //auto itdepth=mCurrentDepthDynamic.begin(), itenddepth=mCurrentDepthDynamic.end();
+        for( ; it!=itend; it++)
+        {
+            int label = it->first;
+            std::map<int, std::vector<int>> m = it->second;
+            std::vector<float> vd = mCurrentDepthDynamic[label];
+            std::vector<int> vN = mCurrentPixelsDynamicN[label];
+
+            cv::Scalar scalar;
+            ChooseColor(label, scalar);
+
+            auto itm=m.begin(), itmend=m.end();
+            //int rowInit=itm->first;
+            int colN=0;
+            for(;itm!=itmend;itm++){
+                int row=itm->first;
+                //cout << "row:" << row;
+                std::vector<int> vcol=itm->second;
+                for(int i=0; i<vcol.size(); i++){
+
+                    //cout << " col:" << i ;
+                    float d=vd[vN[colN]+i];
+                    if(d>0){
+                        cv::Point2f pt;
+                        pt.x=vcol[i];
+                        pt.y=row;
+                        cv::circle(im,pt,3,scalar,-1);
+                        //cout << " | d:" << d;
+                    }
+
+                }
+                colN++;
+                //cout << endl;
+            }
+
+            //cout << "label: " << label << "  num:" << vkp.size() << endl;
+        } */
     }
     //cout << "fram id: " << mFrameId << "  ---------" << endl;
 
@@ -278,7 +347,7 @@ cv::Mat FrameDrawer::DrawFrameNew()
     /// -------------------
     /// 下面show动态物体速度
 
-    for(auto itBoundary=mBoundaryDynamic.begin(), itBoundaryend=mBoundaryDynamic.end() ; itBoundary!=itBoundaryend; itBoundary++)
+    for(auto itBoundary=mCurrentBoundaryDynamic.begin(), itBoundaryend=mCurrentBoundaryDynamic.end() ; itBoundary!=itBoundaryend; itBoundary++)
     {
         cv::Point2i p1,p2;
 
@@ -572,9 +641,10 @@ void FrameDrawer::Update(Tracking *pTracker)
     pTracker->mImGray.copyTo(mIm);
     //pTracker->mImGraySemantic.copyTo(mIm); // test 20230901
     mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;
-    mmCurrentKeysDynamic=pTracker->mCurrentFrame.mmKeysDynamic;
+    mmCurrentPixelsDynamic=pTracker->mCurrentFrame.mmPixelsDynamic;
     mmCurrentDepthDynamic=pTracker->mCurrentFrame.mmDepthDynamic;
     mmCurrentBoundaryDynamic=pTracker->mCurrentFrame.mmBoundaryDynamic;
+    mmCurrentPixelsDynamicN=pTracker->mCurrentFrame.mmPixelsDynamicN;
 
     N = mvCurrentKeys.size();
     mvbVO = vector<bool>(N,false);

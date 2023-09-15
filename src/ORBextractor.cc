@@ -1505,9 +1505,9 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
 
 /// 20230907 新增读取语义图
 void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSemantic,
-                               std::vector<cv::KeyPoint>& _keypoints, std::map<int, std::vector<cv::KeyPoint>>& _keypoints_dynamic,
-                               cv::OutputArray _descriptors, std::map<int, std::map<int, std::vector<int>>>& _pixels, std::map<int, std::vector<int>>& _colrange,
-                               bool bLeft)
+                               std::vector<cv::KeyPoint>& _keypoints,  cv::OutputArray _descriptors,
+                               std::map<int, std::map<int, std::vector<int>>>& _pixels, std::map<int, std::vector<int>>& _colrange,
+                               std::map<int, std::vector<int>>& _pixelsnum, bool bLeft)
 {
     if(_image.empty())
         return;
@@ -1607,45 +1607,14 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
     /// 下面是对动态区域进行像素点提取
 
     if(bLeft){ /// 因为只有左目的语义图，仅对左目进行像素点提取
-        const int distance = 5;
-        const int bound = 10; // 边界
-        //std::map<int, std::vector<cv::KeyPoint>> mapKeyPoint;
-        for(int i=bound; i<imageSemantic.rows-bound; ){
-            for(int j=bound; j<imageSemantic.cols-bound; ){
-                int label = imageSemantic.at<char16_t>(i,j);
-                if(label>=26000 && label<27000){
-                    auto it=_keypoints_dynamic.find(label);
-                    if(it!=_keypoints_dynamic.end()){
-                        cv::KeyPoint kp;
-                        kp.pt.x = j;
-                        kp.pt.y = i;
-                        kp.class_id = label;
-                        it->second.push_back(kp);
-                    }
-                    else{
-                        cv::KeyPoint kp;
-                        kp.pt.x = j;
-                        kp.pt.y = i;
-                        kp.class_id = label;
-                        std::vector<cv::KeyPoint> vKeyPoint={kp};
-                        _keypoints_dynamic.insert(pair<int, std::vector<cv::KeyPoint>>(label, vKeyPoint));
-                    }
-                }
-                j+=distance;
-            }
-            i+=distance;
-        }
-        //cout << "_keypoints_dynamic:" << _keypoints_dynamic.size() << endl;
 
-        /// ============================================
-        /// 求掩码并提取像素点(掩码->特征点)
-        //std::map<int, std::map<int, std::vector<int>>> mKeysDynamic; // label->行数->列数
-        //std::map<int, std::vector<int>> mUrange; // label->行数->列数
+        /// 1、求掩码并提取像素点(掩码->特征点)
         int uMin=INT_MAX, uMax=-1;
         const int rowStep=3;
         const int colStep=6;
-        for(int i=0; i<imageSemantic.rows;){
-            for(int j=0; j<imageSemantic.cols; ){
+        const int bound=8;
+        for(int i=bound; i<imageSemantic.rows-bound;){
+            for(int j=bound; j<imageSemantic.cols-bound; ){
                 int label=imageSemantic.at<char16_t>(i,j);
                 if(label>=26000 && label<27000){
                     if(imageSemantic.at<char16_t>(i,j)==label && imageSemantic.at<char16_t>(i,j+1)==label
@@ -1661,6 +1630,16 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
                             else{
                                 m.insert(pair<int, std::vector<int>>(i,{j}));
                                 //cout << "label:" << label << " i:" << i << endl;
+
+                                std::vector<int>& vpixelsnum = _pixelsnum[label];
+                                int n1=vpixelsnum[vpixelsnum.size()-1];
+                                int n2=m[i-rowStep].size();
+                                int n3 = n1+n2;
+
+                                //if(label==26052)
+                                //    cout << "label:" << label << " i:" << i << " n1:" << n1 << " n2:" << n2 << " n3:" << n3 << endl;
+
+                                vpixelsnum.push_back(n3);
                             }
 
                             std::vector<int>& vUrange = _colrange[label];
@@ -1674,6 +1653,8 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
                             _pixels.insert(pair<int, std::map<int, std::vector<int>>>(label,{{i,{j}}}));
 
                             _colrange.insert(pair<int, std::vector<int>>(label,{j,j}));
+
+                            _pixelsnum.insert(pair<int, std::vector<int>>(label,{0}));
                             //cout << "label:" << label << " i:" << i << endl;
                         }
 
@@ -1687,9 +1668,31 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
 
             i+=rowStep;
         }
-        /// 打印信息
 
+        /// 2、稀疏像素点
+        /*
+        auto itpixel=_pixels.begin(), itpixelend=_pixels.end();
+        for(; itpixel!=itpixelend; itpixel++){
+            int label=itpixel->first;
+            std::map<int, std::vector<int>> m=itpixel->second;
+            cout << "label:" << label << " m:" << m.size() << endl;
+            auto itm=m.begin(),itmend=m.end();
+            for(; itm!=itmend; itm++){
+                cout << " v:"  << itm->first << " | " << itm->second.size() << endl ;
+                //std::vector<int> v=itm->second;
+                //for(int i=0; i<v.size(); i++){
+                //    cout << v[i] << ", ";
+                //}
+                //cout << endl;
+            }
+
+            cout << endl;
+        }
+         */
+
+        /// 打印信息
         //cout << "mKeysDynamic:" << _pixels.size() << endl;
+
         /*
         auto it=_pixels.begin(), itend=_pixels.end();
         for(; it!=itend; it++){
@@ -1697,19 +1700,20 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
             std::map<int, std::vector<int>> m=it->second;
             cout << "label:" << label << " m:" << m.size() << endl;
             auto itm=m.begin(),itmend=m.end();
-            cout << " v:";
+            //cout << " v:";
             for(; itm!=itmend; itm++){
-                cout << " v:"  << itm->first << " | ";
-                std::vector<int> v=itm->second;
-                for(int i=0; i<v.size(); i++){
-                    cout << v[i] << ", ";
-                }
-                cout << endl;
+                cout << " v:"  << itm->first << " | " << itm->second.size() << endl ;
+                //std::vector<int> v=itm->second;
+                //for(int i=0; i<v.size(); i++){
+                //    cout << v[i] << ", ";
+                //}
+                //cout << endl;
             }
 
             cout << endl;
         }
          */
+
 
 
         /*
@@ -1720,6 +1724,17 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
             cout << "label:" << label << " umin:" << v[0] << " umax:" << v[1] << endl;
         }
          */
+
+        /*
+        auto it=_pixelsnum.begin(), itend=_pixelsnum.end();
+        for(; it!=itend; it++){
+            int label=it->first;
+            std::vector<int> v=it->second;
+            cout << "label:" << label;
+            for(int i=0;i<v.size();i++)
+                cout  << "   i:" << i << " num:" << v[i] << endl;
+        }
+        */
 
     }
 }
