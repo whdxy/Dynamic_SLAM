@@ -105,7 +105,7 @@ public:
     // Backprojects a keypoint (if stereo/depth info available) into 3D world coordinates.
     cv::Mat UnprojectStereo(const int &i);
 
-    cv::Mat UnprojectStereoDynamic(const int &label, const int &row, const int &col, const float &depth);
+    cv::Mat UnprojectStereoDynamic(const int &label, const int &i);
 
 public:
     // Vocabulary used for relocalization.
@@ -152,17 +152,12 @@ public:
 
 
     /// new for dynamic
-    //std::map<int, std::vector<cv::KeyPoint>> mmKeysDynamic, mmKeysRightDynamic; // 储存各个实例类中的像素点
-    //std::map<int, std::vector<float>> mmDepthDynamic;  // 储存各个实例类中像素点的深度
-    //std::map<int, std::vector<cv::Point2i>> mmBoundaryDynamic;  // 储存各个实例类中像素点的深度
-    //std::map<int, std::vector<cv::Point3f*>> mmMapPointsDynamic;
+    std::map<int, std::vector<cv::KeyPoint>> mmKeysDynamic, mmKeysRightDynamic; // 储存各个实例类中的像素点
+    std::map<int, std::vector<float>> mmDepthDynamic;  // 储存各个实例类中像素点的深度
+    std::map<int, std::vector<cv::Point2i>> mmBoundaryDynamic;  // 储存各个实例类中像素点的深度
+    std::map<int, std::vector<cv::Point3f*>> mmMapPointsDynamic;
+    std::map<int, float> mmDepthInstanceDynamic;
     static int nLabelMin; /// new 标记最小标签id
-    std::map<int, std::map<int, std::vector<int>>> mmPixelsDynamic; // label->行数->列数
-    std::map<int, std::vector<float>> mmDepthDynamic; // label->像素深度(直接按行排列)
-    std::map<int, std::vector<int>> mmBoundaryDynamic; // label->边界
-    std::map<int, std::vector<cv::Point3f*>> mmMapPointsDynamic; // 地图点
-    std::map<int, std::vector<int>> mmPixelsDynamicN; // 储存每层的特征点数量，如第1行有10个，第2行有15个，第2行有18个，则{0,10,25,43}
-
 
 
     // Bag of Words Vector structures.
