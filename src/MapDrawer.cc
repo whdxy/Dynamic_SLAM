@@ -28,7 +28,6 @@
 namespace ORB_SLAM2
 {
 
-
 MapDrawer::MapDrawer(Map* pMap, const string &strSettingPath):mpMap(pMap)
 {
     cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
@@ -108,7 +107,6 @@ void MapDrawer::DrawMapPointsDynamic()
             cv::Point3f* p3f=vp3f[i];
             glVertex3f(p3f->x,p3f->y,p3f->z);
         }
-        //cout << num++ << " " << r << " " << g << " " << b <<  " " << vp3f.size() << endl;
     }
     glEnd();
 }

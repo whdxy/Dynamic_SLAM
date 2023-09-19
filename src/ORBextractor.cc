@@ -1504,9 +1504,8 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
 }
 
 /// 20230907 新增读取语义图
-void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSemantic, cv::InputArray _mask,
-        std::vector<cv::KeyPoint>& _keypoints, std::map<int, std::vector<cv::KeyPoint>>& _keypoints_dynamic, cv::OutputArray _descriptors,
-        bool bLeft)
+void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSemantic, std::vector<cv::KeyPoint>& _keypoints,
+        std::map<int, std::vector<cv::KeyPoint>>& _keypoints_dynamic, cv::OutputArray _descriptors, bool bLeft)
 {
     if(_image.empty())
         return;

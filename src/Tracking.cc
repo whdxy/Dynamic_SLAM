@@ -661,7 +661,7 @@ void Tracking::StereoInitializationNew()
     /// 上面是对静态的特征点进行处理
     /// =======================
     /// 上面是对动态的像素点进行处理
-
+    /*
     auto itPixelsDynamic=mCurrentFrame.mmPixelsDynamic.begin(), itPixelsDynamicend=mCurrentFrame.mmPixelsDynamic.end();
     //auto itDepthDynamic=mCurrentFrame.mmDepthDynamic.begin();
     while(itPixelsDynamic!=itPixelsDynamicend){
@@ -706,8 +706,38 @@ void Tracking::StereoInitializationNew()
     }
     mCurrentFrame.nLabelMin = mCurrentFrame.mmMapPointsDynamic.begin()->first;
     //cout << "nLabelMin:" << mCurrentFrame.nLabelMin << endl;
+    //cout << "New map created with " << mpMap->MapPointsInMap() << " points, " << mCurrentFrame.mmPixelsDynamic.size() << " objects"<< endl;
+     */
 
-    cout << "New map created with " << mpMap->MapPointsInMap() << " points, " << mCurrentFrame.mmPixelsDynamic.size() << " objects"<< endl;
+    auto itKeysDynamic=mCurrentFrame.mmKeysDynamic.begin(), itKeysDynamicend=mCurrentFrame.mmKeysDynamic.end();
+    auto itDepthDynamic=mCurrentFrame.mmDepthDynamic.begin();
+    while(itKeysDynamic!=itKeysDynamicend){
+        int label = itKeysDynamic->first;
+        std::vector<cv::KeyPoint> vkp = itKeysDynamic->second;
+        std::vector<float> vd = itDepthDynamic->second;
+        //cout << "vkp:" << vkp.size() << " vd:" << vd.size() << endl;
+        std::vector<cv::Point3f*> v3f;
+        for(int i=0; i<vkp.size(); i++){
+            if(vd[i]<=0)
+                continue;
+            cv::Mat x3D = mCurrentFrame.UnprojectStereoDynamic(label,i);
+
+            cv::Point3f* p3f = new cv::Point3f(x3D.at<float>(0), x3D.at<float>(1), x3D.at<float>(2));
+            v3f.push_back(p3f);
+
+            //if(label==26053)
+            //    cout << "label:" << label << " " << x3D.at<float>(0) << " " << x3D.at<float>(1) << " " << x3D.at<float>(2) << endl;
+        }
+        //cout << "label:" << label << " " << vkp.size() << endl;
+        mCurrentFrame.mmMapPointsDynamic.insert(pair<int, std::vector<cv::Point3f*>>(label, v3f));
+        mpMap->AddMapPointDynamic(label, v3f);
+        itKeysDynamic++;
+        itDepthDynamic++;
+
+    }
+    mCurrentFrame.nLabelMin = mCurrentFrame.mmMapPointsDynamic.begin()->first;
+    //cout << "nLabelMin:" << mCurrentFrame.nLabelMin << endl;
+    cout << "New map created with " << mpMap->MapPointsInMap() << " points, " << mCurrentFrame.mmKeysDynamic.size() << " objects"<< endl;
 }
 
 void Tracking::MonocularInitialization()
