@@ -24,8 +24,8 @@
 #include "Map.h"
 #include "MapPoint.h"
 #include "KeyFrame.h"
-//#include <pangolin/pangolin.h>
-#include "Thirdparty/Pangolin-0.5/include/pangolin/pangolin.h"
+#include <pangolin/pangolin.h>
+//#include "Thirdparty/Pangolin-0.5/include/pangolin/pangolin.h"
 
 #include<mutex>
 

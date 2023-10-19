@@ -63,9 +63,6 @@ public:
     cv::Mat GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const double &timestamp);
     cv::Mat GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const cv::Mat &imRectSemantic, const double &timestamp);
 
-    cv::Mat GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp);
-    cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
-
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
     void SetViewer(Viewer* pViewer);
@@ -77,7 +74,6 @@ public:
 
     // Use this function if you have deactivated local mapping and you only want to localize the camera.
     void InformOnlyTracking(const bool &flag);
-
 
 public:
 
@@ -123,6 +119,7 @@ public:
     // new for FPS
     vector<std::chrono::steady_clock::time_point> mvtime;
     int ComputeFPS();
+
 protected:
 
     // Main tracking function. It is independent of the input sensor.

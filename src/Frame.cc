@@ -835,7 +835,7 @@ void Frame::ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRigh
             {
                 cv::Mat IR = mpORBextractorRight->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduR0+incR-w,scaleduR0+incR+w+1);
                 IR.convertTo(IR,CV_32F);
-                IR = IR - IR.at<float>(w,w) *cv::Mat::ones(IR.rows,IR.cols,CV_32F);
+                IR = IR - IR.at<float>(w,w) * cv::Mat::ones(IR.rows,IR.cols,CV_32F);
 
                 float dist = cv::norm(IL,IR,cv::NORM_L1);
                 if(dist<bestDist)

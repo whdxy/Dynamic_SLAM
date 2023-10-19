@@ -63,7 +63,6 @@ public:
       cv::OutputArray descriptors);
 
     /// 20230907 新增读取语义图
-
     void operator()( cv::InputArray _image, cv::InputArray _imageSemantic, std::vector<cv::KeyPoint>& _keypoints,
                      std::map<int, std::vector<cv::KeyPoint>>& _keypoints_dynamic, cv::OutputArray _descriptors, bool bLeft);
 
