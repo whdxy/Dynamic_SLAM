@@ -37,6 +37,7 @@
 #include "Initializer.h"
 #include "MapDrawer.h"
 #include "System.h"
+#include "InstanceTracking.h"
 
 #include <mutex>
 
@@ -51,6 +52,7 @@ class Map;
 class LocalMapping;
 class LoopClosing;
 class System;
+class InstanceTracking;
 
 class Tracking
 {  
@@ -95,7 +97,11 @@ public:
     // Current Frame
     Frame mCurrentFrame;
     cv::Mat mImGray;
-    //cv::Mat mImGraySemantic; // test 29230901
+
+    /// new
+    cv::Mat mImGrayLast;
+    cv::Mat mImGrayRight;
+    cv::Mat mImGraySemantic;
 
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;
@@ -120,6 +126,9 @@ public:
     vector<std::chrono::steady_clock::time_point> mvtime;
     int ComputeFPS();
 
+    /// new
+    InstanceTracking* mpInstanceTracking;
+
 protected:
 
     // Main tracking function. It is independent of the input sensor.
@@ -137,6 +146,9 @@ protected:
     bool TrackReferenceKeyFrame();
     void UpdateLastFrame();
     bool TrackWithMotionModel();
+
+    ///new
+    bool TrackDynamic();
 
     bool Relocalization();
 

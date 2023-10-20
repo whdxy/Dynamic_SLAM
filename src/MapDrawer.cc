@@ -82,18 +82,24 @@ void MapDrawer::DrawMapPoints()
 
 void MapDrawer::DrawMapPointsDynamic()
 {
-    const map<int, std::vector<cv::Point3f*>> &mpMPsDynamic = mpMap->GetAllMapPointsDynamic();
+    const vector<cv::Point3f>& vMPsDynamic = mpMap->GetAllMapPointsDynamic();
 
-    if(mpMPsDynamic.empty())
+    if(vMPsDynamic.empty())
         return;
 
     glPointSize(mPointSize*2);
     glBegin(GL_POINTS);
 
-    auto it=mpMPsDynamic.begin();
-    auto itend=mpMPsDynamic.end();
+    auto it=vMPsDynamic.begin();
+    auto itend=vMPsDynamic.end();
     int num=0;
     for(; it!=itend; it++){
+        glColor3f(0.0,0.0,1.0);
+        for(int i=0; i<vMPsDynamic.size(); i++){
+            glVertex3f(it->x,it->y,it->z);
+        }
+
+        /*
         int label=it->first;
         std::vector<cv::Point3f*> vp3f=it->second;
         cv::Scalar scalar;
@@ -107,6 +113,7 @@ void MapDrawer::DrawMapPointsDynamic()
             cv::Point3f* p3f=vp3f[i];
             glVertex3f(p3f->x,p3f->y,p3f->z);
         }
+         */
     }
     glEnd();
 }

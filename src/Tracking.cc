@@ -78,6 +78,11 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
 
     mbf = fSettings["Camera.bf"];
 
+    /// new
+    mpInstanceTracking = new InstanceTracking(mbf, fx, fy, cx, cy);
+    mpInstanceTracking->FastInitialization(30);
+    mpInstanceTracking->StereoMatchingInitialization(1,63,10,100);
+
     float fps = fSettings["Camera.fps"];
     if(fps==0)
         fps=30;
@@ -208,21 +213,20 @@ cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRe
 cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const cv::Mat &imRectSemantic, const double &timestamp)
 {
     mImGray = imRectLeft;
-    //mImGraySemantic = imRectSemantic; // test 20230901
-    cv::Mat imGrayRight = imRectRight;
-    cv::Mat imGraySemantic = imRectSemantic;
+    mImGrayRight = imRectRight;
+    mImGraySemantic = imRectSemantic;
 
     if(mImGray.channels()==3)
     {
         if(mbRGB)
         {
             cvtColor(mImGray,mImGray,CV_RGB2GRAY);
-            cvtColor(imGrayRight,imGrayRight,CV_RGB2GRAY);
+            cvtColor(mImGrayRight,mImGrayRight,CV_RGB2GRAY);
         }
         else
         {
             cvtColor(mImGray,mImGray,CV_BGR2GRAY);
-            cvtColor(imGrayRight,imGrayRight,CV_BGR2GRAY);
+            cvtColor(mImGrayRight,mImGrayRight,CV_BGR2GRAY);
         }
     }
     else if(mImGray.channels()==4)
@@ -230,27 +234,28 @@ cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRec
         if(mbRGB)
         {
             cvtColor(mImGray,mImGray,CV_RGBA2GRAY);
-            cvtColor(imGrayRight,imGrayRight,CV_RGBA2GRAY);
+            cvtColor(mImGrayRight,mImGrayRight,CV_RGBA2GRAY);
         }
         else
         {
             cvtColor(mImGray,mImGray,CV_BGRA2GRAY);
-            cvtColor(imGrayRight,imGrayRight,CV_BGRA2GRAY);
+            cvtColor(mImGrayRight,mImGrayRight,CV_BGRA2GRAY);
         }
     }
 
     //mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
-    mCurrentFrame = Frame(mImGray,imGrayRight, imGraySemantic, timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
+    mCurrentFrame = Frame(mImGray,mImGrayRight, mImGraySemantic, timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
 
     Track();
 
-    // new for fps
+    mImGrayLast = mImGray;
+
+    /// new for fps
     mvtime.push_back(std::chrono::steady_clock::now());
     //cout << "num: " << mvtime.size() << "   fps:" << ComputeFPS() << endl;
 
     return mCurrentFrame.mTcw.clone();
 }
-
 
 void Tracking::Track()
 {
@@ -267,8 +272,8 @@ void Tracking::Track()
     if(mState==NOT_INITIALIZED)
     {
         if(mSensor==System::STEREO || mSensor==System::RGBD)
-            //StereoInitialization();
-            StereoInitializationNew();
+            StereoInitialization();
+            //StereoInitializationNew();
         else
             MonocularInitialization();
 
@@ -300,6 +305,7 @@ void Tracking::Track()
                 else
                 {
                     bOK = TrackWithMotionModel();
+
                     if(!bOK)
                         bOK = TrackReferenceKeyFrame();
                 }
@@ -312,7 +318,6 @@ void Tracking::Track()
         else
         {
             // Localization Mode: Local Mapping is deactivated
-
             if(mState==LOST)
             {
                 bOK = Relocalization();
@@ -403,6 +408,9 @@ void Tracking::Track()
         else
             mState=LOST;
 
+        /// new
+        TrackDynamic();
+
         // Update drawer
         mpFrameDrawer->Update(this);
 
@@ -471,7 +479,10 @@ void Tracking::Track()
         if(!mCurrentFrame.mpReferenceKF)
             mCurrentFrame.mpReferenceKF = mpReferenceKF;
 
+
         mLastFrame = Frame(mCurrentFrame);
+
+
     }
 
     // Store frame pose information to retrieve the complete camera trajectory afterwards.
@@ -524,7 +535,21 @@ void Tracking::StereoInitialization()
             }
         }
 
-        cout << "New map created with " << mpMap->MapPointsInMap() << " points" << endl;
+        /// 上面是静态点
+        /// ====================
+        /// 下面是动态点
+        /// new
+        mpInstanceTracking->ComputeLabelAndBoundary(mImGraySemantic, mCurrentFrame.msDynamicLabel, mCurrentFrame.mmBoundaryDynamic);
+        //cout << "id:" << mCurrentFrame.mnId << " " << mCurrentFrame.msDynamicLabel.size() << endl;
+        //mpInstanceTracking->DrawBoundary(mImGray, mCurrentFrame.mmBoundaryDynamic);
+        mpInstanceTracking->FastDetect(mImGray, mImGraySemantic, mCurrentFrame.mmBoundaryDynamic, mCurrentFrame.mmDynamicKeys);
+        int num=0;
+        for(auto it=mCurrentFrame.mmDynamicKeys.begin(), itend=mCurrentFrame.mmDynamicKeys.end(); it!=itend; it++){
+            num+=it->second.size();
+        }
+        mpInstanceTracking->ComputeDisp(mImGray,mImGrayRight,mCurrentFrame.mmDynamicKeys, mCurrentFrame.mmDynamicDepth, 11, 0, 64);
+
+        cout << "New map created with: Static " << mpMap->MapPointsInMap() << " points, Dynamic " <<  num << " points" << endl;
 
         mpLocalMapper->InsertKeyFrame(pKFini);
 
@@ -544,142 +569,8 @@ void Tracking::StereoInitialization()
         mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
         mState=OK;
-    }
-}
-
-void Tracking::StereoInitializationNew()
-{
-    if(mCurrentFrame.N>500)
-    {
-        // Set Frame pose to the origin
-        mCurrentFrame.SetPose(cv::Mat::eye(4,4,CV_32F));
-
-        // Create KeyFrame
-        KeyFrame* pKFini = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);
-
-        // Insert KeyFrame in the map
-        mpMap->AddKeyFrame(pKFini);
-
-        // Create MapPoints and asscoiate to KeyFrame
-        for(int i=0; i<mCurrentFrame.N;i++)
-        {
-            float z = mCurrentFrame.mvDepth[i];
-            if(z>0)
-            {
-                cv::Mat x3D = mCurrentFrame.UnprojectStereo(i);
-                MapPoint* pNewMP = new MapPoint(x3D,pKFini,mpMap);
-                pNewMP->AddObservation(pKFini,i);
-                pKFini->AddMapPoint(pNewMP,i);
-                pNewMP->ComputeDistinctiveDescriptors();
-                pNewMP->UpdateNormalAndDepth();
-                mpMap->AddMapPoint(pNewMP);
-
-                mCurrentFrame.mvpMapPoints[i]=pNewMP;
-            }
-        }
-
-        //cout << "New map created with " << mpMap->MapPointsInMap() << " points" << endl;
-
-        mpLocalMapper->InsertKeyFrame(pKFini);
-
-        mLastFrame = Frame(mCurrentFrame);
-        mnLastKeyFrameId=mCurrentFrame.mnId;
-        mpLastKeyFrame = pKFini;
-
-        mvpLocalKeyFrames.push_back(pKFini);
-        mvpLocalMapPoints=mpMap->GetAllMapPoints();
-        mpReferenceKF = pKFini;
-        mCurrentFrame.mpReferenceKF = pKFini;
-
-        mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
-
-        mpMap->mvpKeyFrameOrigins.push_back(pKFini);
-
-        mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
-
-        mState=OK;
-    }
-
-    /// 上面是对静态的特征点进行处理
-    /// =======================
-    /// 上面是对动态的像素点进行处理
-    /*
-    auto itPixelsDynamic=mCurrentFrame.mmPixelsDynamic.begin(), itPixelsDynamicend=mCurrentFrame.mmPixelsDynamic.end();
-    //auto itDepthDynamic=mCurrentFrame.mmDepthDynamic.begin();
-    while(itPixelsDynamic!=itPixelsDynamicend){
-        int label = itPixelsDynamic->first;
-        std::map<int, std::vector<int>> m = itPixelsDynamic->second;
-        std::vector<float> vd = mCurrentFrame.mmDepthDynamic[label];
-        std::vector<int> vN = mCurrentFrame.mmPixelsDynamicN[label];
-
-        std::vector<cv::Point3f*> v3f;
-
-        auto itm=m.begin(), itmend=m.end();
-        //int rowInit=itm->first;
-        //cout << "label:" << label << " m:" << m.size() << " rowInit:" << rowInit << endl;
-
-        int rowN=0;
-        for(; itm!=itmend; itm++){
-            int row=itm->first;
-            std::vector<int> vcol=itm->second;
-
-            for(int i=0; i<vcol.size(); i++){
-                float d=vd[vN[rowN]+i];
-                if(d<=0)
-                    continue;
-
-                //cout << " | " << d;
-
-                cv::Mat x3D = mCurrentFrame.UnprojectStereoDynamic(label,row,i,d);
-
-                cv::Point3f* p3f = new cv::Point3f(x3D.at<float>(0), x3D.at<float>(1), x3D.at<float>(2));
-                v3f.push_back(p3f);
-
-            }
-            //cout << endl;
-            rowN++;
-        }
-
-        mCurrentFrame.mmMapPointsDynamic.insert(pair<int, std::vector<cv::Point3f*>>(label, v3f));
-        mpMap->AddMapPointDynamic(label, v3f);
-        itPixelsDynamic++;
-        //itDepthDynamic++;
 
     }
-    mCurrentFrame.nLabelMin = mCurrentFrame.mmMapPointsDynamic.begin()->first;
-    //cout << "nLabelMin:" << mCurrentFrame.nLabelMin << endl;
-    //cout << "New map created with " << mpMap->MapPointsInMap() << " points, " << mCurrentFrame.mmPixelsDynamic.size() << " objects"<< endl;
-     */
-
-    auto itKeysDynamic=mCurrentFrame.mmKeysDynamic.begin(), itKeysDynamicend=mCurrentFrame.mmKeysDynamic.end();
-    auto itDepthDynamic=mCurrentFrame.mmDepthDynamic.begin();
-    while(itKeysDynamic!=itKeysDynamicend){
-        int label = itKeysDynamic->first;
-        std::vector<cv::KeyPoint> vkp = itKeysDynamic->second;
-        std::vector<float> vd = itDepthDynamic->second;
-        //cout << "vkp:" << vkp.size() << " vd:" << vd.size() << endl;
-        std::vector<cv::Point3f*> v3f;
-        for(int i=0; i<vkp.size(); i++){
-            if(vd[i]<=0)
-                continue;
-            cv::Mat x3D = mCurrentFrame.UnprojectStereoDynamic(label,i);
-
-            cv::Point3f* p3f = new cv::Point3f(x3D.at<float>(0), x3D.at<float>(1), x3D.at<float>(2));
-            v3f.push_back(p3f);
-
-            //if(label==26053)
-            //    cout << "label:" << label << " " << x3D.at<float>(0) << " " << x3D.at<float>(1) << " " << x3D.at<float>(2) << endl;
-        }
-        //cout << "label:" << label << " " << vkp.size() << endl;
-        mCurrentFrame.mmMapPointsDynamic.insert(pair<int, std::vector<cv::Point3f*>>(label, v3f));
-        mpMap->AddMapPointDynamic(label, v3f);
-        itKeysDynamic++;
-        itDepthDynamic++;
-
-    }
-    mCurrentFrame.nLabelMin = mCurrentFrame.mmMapPointsDynamic.begin()->first;
-    //cout << "nLabelMin:" << mCurrentFrame.nLabelMin << endl;
-    cout << "New map created with " << mpMap->MapPointsInMap() << " points, " << mCurrentFrame.mmKeysDynamic.size() << " objects"<< endl;
 }
 
 void Tracking::MonocularInitialization()
@@ -1048,6 +939,41 @@ bool Tracking::TrackWithMotionModel()
     return nmatchesMap>=10;
 }
 
+bool Tracking::TrackDynamic(){
+
+    /// stpe1、追踪并计算视察深度
+    mpInstanceTracking->OpticalFlowPyrLK(mImGray, mImGrayLast, mImGraySemantic,mCurrentFrame.mmDynamicKeys, mCurrentFrame.mmDynamicOptFlowID, mLastFrame.mmDynamicKeys);
+    mpInstanceTracking->ComputeDisp(mImGray,mImGrayRight,mCurrentFrame.mmDynamicKeys, mCurrentFrame.mmDynamicDepth, 11, 0, 64);
+
+    int num=0;
+    for(auto it=mLastFrame.mmDynamicKeys.begin(), itend=mLastFrame.mmDynamicKeys.end(); it!=itend; it++){
+        num+=it->second.size();
+    }
+    cout << "id:" << mLastFrame.mnId << " point's num:" << num << endl;
+
+    num=0;
+
+    for(auto it=mCurrentFrame.mmDynamicKeys.begin(), itend=mCurrentFrame.mmDynamicKeys.end(); it!=itend; it++){
+        num+=it->second.size();
+    }
+    cout << "id:" << mCurrentFrame.mnId << " point's num:" << num << endl;
+    cout << "========" << endl;
+
+    /// stpe2、根据追踪匹配结果计算动态物体位姿变换，并返回地图点（地图点：前一帧fast && 与当前帧跟踪匹配上 && 具有深度）
+    cv::Mat Tcw = mCurrentFrame.mTcw;
+    //cout << Tcw << endl;
+
+    std::vector<cv::Point3f> vp3d = mpInstanceTracking->ComputePoses(mCurrentFrame.mmDynamicKeys, mLastFrame.mmDynamicKeys,Tcw,
+                                     mCurrentFrame.mmDynamicOptFlowID,mLastFrame.mmDynamicDepth,mLastFrame.mmDynamicPoses);
+
+    for(auto p: vp3d)
+        mpMap->AddMapPointDynamic(p);
+
+    mpInstanceTracking->FastDetectFill(mImGray, mImGraySemantic, mCurrentFrame.mmDynamicBoundary, mCurrentFrame.mmDynamicKeys);
+
+    return true;
+}
+
 bool Tracking::TrackLocalMap()
 {
     // We have an estimation of the camera pose and some map points tracked in the frame.
@@ -1222,6 +1148,7 @@ void Tracking::CreateNewKeyFrame()
                 MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];
                 if(!pMP)
                     bCreateNew = true;
+
                 else if(pMP->Observations()<1)
                 {
                     bCreateNew = true;

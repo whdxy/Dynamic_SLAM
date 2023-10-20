@@ -53,7 +53,6 @@ public:
 
     Frame(const cv::Mat &imLeft, const cv::Mat &imRight,  const cv::Mat &imSemantic, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
 
-
     // Constructor for RGB-D cameras.
     Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
 
@@ -98,6 +97,8 @@ public:
     void ComputeStereoMatches();
 
     void ComputeStereoMatchesNew(const cv::Mat &imLeft, const cv::Mat &imRight);
+
+    void ComputeStereoMatches(const cv::Mat &imSemantic);
 
     // Associate a "right" coordinate to a keypoint if there is valid depth in the depthmap.
     void ComputeStereoFromRGBD(const cv::Mat &imDepth);
@@ -152,6 +153,15 @@ public:
 
 
     /// new for dynamic
+    std::vector<bool> mvDynamic;
+    std::set<int> msDynamicLabel;
+    std::map<int, std::vector<cv::Point2i>> mmDynamicBoundary;
+    std::map<int, std::vector<cv::Point2f>> mmDynamicKeys;
+    std::map<int, std::vector<int>> mmDynamicOptFlowID;
+    std::map<int, std::vector<float>> mmDynamicDepth;
+    std::map<int, cv::Mat> mmDynamicPoses;
+
+    ///=============
     std::map<int, std::vector<cv::KeyPoint>> mmKeysDynamic, mmKeysRightDynamic; // 储存各个实例类中的像素点
     std::map<int, std::vector<float>> mmDepthDynamic;  // 储存各个实例类中像素点的深度
     std::map<int, std::vector<cv::Point2i>> mmBoundaryDynamic;  // 储存各个实例类中像素点的深度

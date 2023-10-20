@@ -5,7 +5,20 @@
 #include "InstanceTracking.h"
 
 namespace ORB_SLAM2 {
-    InstanceTracking::InstanceTracking(float bf) : mbf(bf) {}
+
+    InstanceTracking::InstanceTracking(){}
+
+    InstanceTracking::InstanceTracking(float bf, float fx, float fy, float cx, float cy)
+    : mbf(bf), mfx(fx), mfy(fy), mcx(cx), mcy(cy) {
+        mK=cv::Mat::zeros(3, 3, CV_64FC1);
+
+        mK.at<double>(0, 0) = mfx;
+        mK.at<double>(1, 1) = mfy;
+        mK.at<double>(0, 2) = mcx;
+        mK.at<double>(1, 2) = mcy;
+        mK.at<double>(2, 2) = 1.0;
+
+    }
 
     void InstanceTracking::FastInitialization(int threshold) {
         FAST = cv::FastFeatureDetector::create(threshold);
@@ -47,7 +60,7 @@ namespace ORB_SLAM2 {
 
     }
 
-// new: 返回分类的fast角点，用于初始化
+    // new: 返回分类的fast角点，用于初始化
     void InstanceTracking::FastDetect(const cv::Mat &img, const cv::Mat &imgSem,
                                       const std::map<int, std::vector<cv::Point2i>> &boundary,
                                       std::map<int, std::vector<cv::Point2f>> &pt) {
@@ -76,7 +89,7 @@ namespace ORB_SLAM2 {
         }
     }
 
-// new: 返回分类的fast角点，用于追踪
+    // old: 返回分类的fast角点，用于追踪(补充，在追踪的基础上+新提取到的)
     void InstanceTracking::FastDetect(const cv::Mat &img, const cv::Mat &imgSem,
                                       const std::map<int, std::vector<cv::Point2i>> &boundary,
                                       std::map<int, std::vector<cv::Point2f>> &ptCur,
@@ -104,6 +117,7 @@ namespace ORB_SLAM2 {
             }
         }
 
+        /*
         // 可视化
         cv::Mat img2_CV;
         cv::cvtColor(img, img2_CV, cv::COLOR_GRAY2BGR);
@@ -146,15 +160,105 @@ namespace ORB_SLAM2 {
                 }
             }
         }
+         */
 
         //cv::imshow("tracked by opencv", img2_CV);
         //cv::imwrite("/home/whd/SLAM/pic20231017/optical1.png", img2_CV);
         //cv::waitKey(0);
     }
 
-// 1017证明：每个图像分开光流与整体光流效果一样
+    struct PointCompare{
+        bool operator()(const cv::Point2f p1, const cv::Point2f p2) const{
+            if(p1.x != p2.x)
+                return p1.x < p2.x;
+            if(p1.y != p2.y)
+                return p1.y < p2.y;
+        }
+    };
+
+    // new: 返回分类的fast角点，用于追踪(补充，在追踪的基础上+新提取到的)
+    void InstanceTracking::FastDetectFill(const cv::Mat &img, const cv::Mat &imgSem,
+                                      const std::map<int, std::vector<cv::Point2i>> &boundary,
+                                      std::map<int, std::vector<cv::Point2f>> &pt) {
+
+        /// step1、提取特征点
+        std::vector<cv::KeyPoint> kp;
+        FAST->detect(img, kp);
+
+        /// step2、对特帧点进行过滤
+        /// 1、车辆上特征点 2、边界之内
+        std::map<int, std::vector<cv::Point2f>> ptNew;
+        for (auto &KP: kp) {
+            int label = imgSem.at<char16_t>(KP.pt.y, KP.pt.x);
+            if (label > 26000 && label < 27000) {
+                auto it = boundary.find(label);
+                if (it != boundary.end()) {
+                    cv::Point2i p1, p2;
+                    p1 = it->second[0];
+                    p2 = it->second[1];
+
+                    if (p1.x < KP.pt.x && p2.x > KP.pt.x && p1.y < KP.pt.y && p2.y > KP.pt.y) {
+                        //pt.push_back(KP.pt);
+                        auto itP = ptNew.find(label);
+                        if (itP != ptNew.end())
+                            itP->second.push_back(KP.pt);
+                        else
+                            ptNew.insert(std::pair<int, std::vector<cv::Point2f>>(label, {KP.pt}));
+                    }
+                }
+            }
+        }
+
+        /// step3、将广告检测出的特征点加入到光流追踪到的特征点中（比较当前帧fast提取与前一帧光流追踪的角点差）
+        /*
+        for (auto it = pt.begin(), itend = pt.end(); it != itend; it++) {
+
+            int label = it->first;
+            auto itNew = ptNew.find(label);
+            if (itNew != ptNew.end()) {
+                std::vector<cv::Point2f> ptC = itNew->second;
+                std::vector<cv::Point2f> ptL = it->second;
+                std::sort(ptC.begin(), ptC.end(), [](cv::Point2f pt1, cv::Point2f pt2)
+                { if(pt1.x != pt2.x) return pt1.x < pt2.x; if(pt1.y != pt2.y) return pt1.y < pt2.y;});
+                std::sort(ptL.begin(), ptL.end(), [](cv::Point2f pt1, cv::Point2f pt2)
+                { if(pt1.x != pt2.x) return pt1.x < pt2.x; if(pt1.y != pt2.y) return pt1.y < pt2.y;});
+
+                std::vector<cv::Point2f> diff;
+
+                // diff保存Last中有，但Cur没有点角点
+                std::set_difference(ptL.begin(), ptL.end(), ptC.begin(), ptC.end(), std::back_inserter(diff),
+                                    [](cv::Point2f pt1, cv::Point2f pt2) { return pt1.x == pt2.x && pt1.y == pt2.y; });
+
+                itNew->second.insert(itNew->second.end(), diff.begin(), diff.end());
+            }
+        }
+         */
+        // 用set融合特帧点
+        std::map<int, std::set<cv::Point2f, PointCompare>> mpt;
+        for(auto it=pt.begin(), itend=pt.end(); it!=itend; it++){
+
+            //std::set<cv::Point2f, PointCompare> sptTmp = std::set<cv::Point2f, PointCompare>(it->second.begin(), it->second.end());
+            mpt.insert(std::pair<int,std::set<cv::Point2f, PointCompare>>(it->first, std::set<cv::Point2f, PointCompare>(it->second.begin(), it->second.end())));
+        }
+        for(auto it=ptNew.begin(), itend=ptNew.end(); it!=itend; it++){
+            auto it_ = pt.find(it->first);
+            if(it_ != pt.end()){
+                mpt[it->first].insert(it->second.begin(), it->second.end());
+            }
+
+        }
+
+        /// TODO
+        //
+        std::vector<cv::Point2f> vptTemp=std::vector<cv::Point2f>(spt.begin(),spt.end());
+        pt.swap(vptTemp);
+
+    }
+
+
+    // 1017证明：每个图像分开光流与整体光流效果一样
     void InstanceTracking::OpticalFlowPyrLK(const cv::Mat &imgCur, const cv::Mat &imgLast, const cv::Mat &imgSem,
-                                            std::map<int, std::vector<cv::Point2f>> &ptCur,
+                                            std::map<int, std::vector<cv::Point2f>> &ptCur,  std::map<int, std::vector<int>> &OptFlowID,
                                             const std::map<int, std::vector<cv::Point2f>> &ptLast) {
 
         std::map<int, std::vector<cv::Point2f>> ptCur_temp;
@@ -163,21 +267,28 @@ namespace ORB_SLAM2 {
 
         //std::cout << "========================" << std::endl;
         for (auto it = ptLast.begin(), itend = ptLast.end(); it != itend; it++) {
-            ptCur_temp.insert(std::pair<int, std::vector<cv::Point2f>>(it->first, {}));
+
+            int label=it->first;
+            std::vector<cv::Point2f> vp=it->second;
+            if(vp.size() < 20)
+                continue;
+
+            ptCur_temp.insert(std::pair<int, std::vector<cv::Point2f>>(label, {}));
+            OptFlowID.insert(std::pair<int, std::vector<int>>(label, {}));
 
             std::vector<uchar> status;
             std::vector<float> error;
             std::vector<cv::Point2f> pt_cur;
             //std::cout << "label:" << it->first << " " << it->second.size() << std::endl;
-            cv::calcOpticalFlowPyrLK(imgLast, imgCur, it->second, pt_cur, status, error);
+            cv::calcOpticalFlowPyrLK(imgLast, imgCur, vp, pt_cur, status, error);
             for (int i = 0; i < status.size(); i++) {
                 if (status[i]) {
-                    if (imgSem.at<char16_t>(pt_cur[i].y, pt_cur[i].x) == it->first) {
-                        ptCur_temp[it->first].push_back(pt_cur[i]);
+                    if (imgSem.at<char16_t>(pt_cur[i].y, pt_cur[i].x) == label) {
+                        ptCur_temp[label].push_back(pt_cur[i]);
+                        OptFlowID[label].push_back(i);
                         pt_show_cur.push_back(pt_cur[i]);
-                        pt_show_last.push_back(it->second[i]);
+                        pt_show_last.push_back(vp[i]);
                     }
-
                 }
             }
         }
@@ -197,9 +308,9 @@ namespace ORB_SLAM2 {
             cv::line(img2_CV, pt_show_last[i], pt_show_cur[i], cv::Scalar(0, 250, 0));
         }
 
-        cv::imshow("tracked by opencv", img2_CV);
+        //cv::imshow("tracked by opencv", img2_CV);
         //cv::imwrite("/home/whd/SLAM/pic20231017/optical1.png", img2_CV);
-        cv::waitKey(200);
+        //cv::waitKey(200);
     }
 
     void InstanceTracking::StereoMatchingInitialization(int Channels, int PreFilterCap, int UniquenessRatio,
@@ -240,7 +351,7 @@ namespace ORB_SLAM2 {
         //cv::waitKey(0);
     }
 
-// new
+    // new
     void InstanceTracking::ComputeDisp(const cv::Mat &imgL, const cv::Mat &imgR,
                                        const std::map<int, std::vector<cv::Point2f>> &pt,
                                        std::map<int, std::vector<float>> &depth,
@@ -329,10 +440,105 @@ namespace ORB_SLAM2 {
                     }
                 }
                 //std::cout << std::endl << "sum:" << sum << "  num:" << num << "  mean:" << mean << "  stdev:" << stdev << std::endl;
-
             }
             //std::cout << std::endl << std::endl;
         }
+    }
+
+    std::vector<cv::Point3f> InstanceTracking::ComputePoses(std::map<int, std::vector<cv::Point2f>> &ptCur, std::map<int, std::vector<cv::Point2f>> &ptLast, cv::Mat Tcw,
+                                        std::map<int, std::vector<int>> &OptFlowID, std::map<int, std::vector<float>> &depth,std::map<int, cv::Mat>& poses){
+        //std::cout << "ptCur:" << ptCur.size() << "  ptLast:" << ptLast.size() << std::endl;
+
+        //std::cout << " OptFlowID:" << OptFlowID.size() << " depth:" << depth.size() << std::endl;
+
+        std::vector<cv::Point3f> vP3d;
+
+        // 遍历当前帧的特帧点
+        for(auto it=ptCur.begin(),itend=ptCur.end(); it!=itend; it++){
+            int label=it->first;
+            std::vector<cv::Point2f> vp=it->second;
+            cv::Mat Mod = cv::Mat::eye(4,4,CV_32F);
+            int N = vp.size();
+            //std::cout << " N:" << N << std::endl;
+
+            if(N<20)
+                continue;
+
+            std::vector<cv::Point2f> cur_2d;
+            std::vector<cv::Point3f> pre_3d;
+            // 将前一帧特征点恢复成3d点
+            for(int i=0; i<N; i++){
+                int id = OptFlowID[label][i];
+                float z = depth[label][id];
+
+                if(z>0)
+                {
+                    //std::cout << z << "  ";
+                    const float u = ptLast[label][id].x;
+                    const float v = ptLast[label][id].y;
+
+                    const float x = (u-mcx)*z/mfx;
+                    const float y = (v-mcy)*z/mfy;
+                    cv::Mat x3Dc = (cv::Mat_<float>(3,1) << x, y, z);
+
+                    // using ground truth
+                    const cv::Mat Rlw = Tcw.rowRange(0,3).colRange(0,3);
+                    const cv::Mat Rwl = Rlw.t();
+                    const cv::Mat tlw = Tcw.rowRange(0,3).col(3);
+                    const cv::Mat twl = -Rlw.t()*tlw;
+
+                    cv::Mat x3D_p = Rwl*x3Dc+twl;
+
+                    cv::Point3f tmp_3d;
+                    tmp_3d.x = x3D_p.at<float>(0);
+                    tmp_3d.y = x3D_p.at<float>(1);
+                    tmp_3d.z = x3D_p.at<float>(2);
+                    //pre_3d[i] = tmp_3d;
+
+                    cur_2d.push_back(vp[i]);
+                    pre_3d.push_back(tmp_3d);
+
+                    vP3d.push_back(tmp_3d);
+                }
+            }
+            //std::cout << std::endl << "-------" << std::endl;
+
+            // 开始计算
+            // distortion coefficients
+            cv::Mat distCoeffs = cv::Mat::zeros(1, 4, CV_64FC1);
+
+            // output
+            cv::Mat Rvec(3, 1, CV_64FC1);
+            cv::Mat Tvec(3, 1, CV_64FC1);
+            cv::Mat d(3, 3, CV_64FC1);
+            cv::Mat inliers;
+
+            //std::cout << "=================" << std::endl;
+            //std::cout << "label:" << label << " matches:" << pre_3d.size() << std::endl << std::endl;
+            //std::cout << "=================" << std::endl;
+
+            if(pre_3d.size()<8)
+                continue;
+
+            // solve
+            int iter_num = 500;
+            double reprojectionError = 0.4, confidence = 0.98; // 0.3 0.5 1.0
+            cv::solvePnPRansac(pre_3d, cur_2d, mK, distCoeffs, Rvec, Tvec, false,
+                               iter_num, reprojectionError, confidence, inliers, cv::SOLVEPNP_AP3P); // AP3P EPNP P3P ITERATIVE DLS
+
+            cv::Rodrigues(Rvec, d);
+
+            // assign the result to current pose
+            Mod.at<float>(0,0) = d.at<double>(0,0); Mod.at<float>(0,1) = d.at<double>(0,1); Mod.at<float>(0,2) = d.at<double>(0,2); Mod.at<float>(0,3) = Tvec.at<double>(0,0);
+            Mod.at<float>(1,0) = d.at<double>(1,0); Mod.at<float>(1,1) = d.at<double>(1,1); Mod.at<float>(1,2) = d.at<double>(1,2); Mod.at<float>(1,3) = Tvec.at<double>(1,0);
+            Mod.at<float>(2,0) = d.at<double>(2,0); Mod.at<float>(2,1) = d.at<double>(2,1); Mod.at<float>(2,2) = d.at<double>(2,2); Mod.at<float>(2,3) = Tvec.at<double>(2,0);
+
+            std::cout << "label:" << label << " matches:" << pre_3d.size() << std::endl << Mod << std::endl;
+        }
+
+
+        std::cout << "=================" << std::endl;
+        return vP3d;
     }
 
     void InstanceTracking::ComputeLabelAndBoundary(const cv::Mat &imgSem, std::set<int> &Label,
@@ -399,10 +605,14 @@ namespace ORB_SLAM2 {
         }
 
         cv::imshow("label", im);
-        cv::waitKey(1000);
+        //cv::waitKey(1000);
 
         // save
         //cv::imwrite("/home/whd/SLAM/pic20231017/label_boundary2.png", im);
 
+    }
+
+    void InstanceTracking::Setbf(float bf){
+        mbf=bf;
     }
 }

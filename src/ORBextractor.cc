@@ -1446,7 +1446,7 @@ void ORBextractor::operator()( InputArray _image, InputArray _mask, vector<KeyPo
         return;
 
     Mat image = _image.getMat();
-    assert(image.type() == CV_8UC1 );
+    assert(image.type() == CV_8UC1);
 
     // Pre-compute the scale pyramid
     ComputePyramid(image);
@@ -1635,7 +1635,6 @@ void ORBextractor::operator()( cv::InputArray _image, cv::InputArray _imageSeman
         }
         //cout << "_keypoints_dynamic:" << _keypoints_dynamic.size() << endl;
     }
-
 }
 
 void ORBextractor::ComputePyramid(cv::Mat image)

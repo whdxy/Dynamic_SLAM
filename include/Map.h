@@ -42,7 +42,7 @@ public:
 
     void AddKeyFrame(KeyFrame* pKF);
     void AddMapPoint(MapPoint* pMP);
-    void AddMapPointDynamic(const int label, std::vector<cv::Point3f*> pMPDynamic); ///new
+    void AddMapPointDynamic(cv::Point3f pt); ///new
     void EraseMapPoint(MapPoint* pMP);
     void EraseKeyFrame(KeyFrame* pKF);
     void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs);
@@ -51,7 +51,7 @@ public:
 
     std::vector<KeyFrame*> GetAllKeyFrames();
     std::vector<MapPoint*> GetAllMapPoints();
-    std::map<int, std::vector<cv::Point3f*>> GetAllMapPointsDynamic();
+    std::vector<cv::Point3f> GetAllMapPointsDynamic();
     std::vector<MapPoint*> GetReferenceMapPoints();
 
     long unsigned int MapPointsInMap();
@@ -68,10 +68,22 @@ public:
     // This avoid that two points are created simultaneously in separate threads (id conflict)
     std::mutex mMutexPointCreation;
 
+    struct PointCompare{
+        bool operator()(const cv::Point3f p1, const cv::Point3f p2) const{
+            if(p1.x != p2.x)
+                return p1.x < p2.x;
+            if(p1.y != p2.y)
+                return p1.y < p2.y;
+
+            if(p1.z != p2.z)
+                return p1.z < p2.z;
+        }
+    };
+
 protected:
     std::set<MapPoint*> mspMapPoints;
     std::set<KeyFrame*> mspKeyFrames;
-    std::map<int, std::vector<cv::Point3f*>> mmMapPointsDynamic; /// new
+    std::set<cv::Point3f, PointCompare> msDynamicMapPoints; /// new
     //int label_min; /// new 标记最小标签id
 
     std::vector<MapPoint*> mvpReferenceMapPoints;

@@ -11,27 +11,29 @@ namespace ORB_SLAM2 {
 
     class InstanceTracking {
     public:
-        /// fast
-        InstanceTracking(float bf);
 
+        InstanceTracking();
+        InstanceTracking(float bf, float fx, float fy, float cx, float cy);
+
+        /// fast
         void FastInitialization(int threshold);
 
-        void
-        FastDetect(const cv::Mat &img, const cv::Mat &imgSem, const std::map<int, std::vector<cv::Point2i>> &boundary,
+        void FastDetect(const cv::Mat &img, const cv::Mat &imgSem, const std::map<int, std::vector<cv::Point2i>> &boundary,
                    std::vector<cv::Point2f> &pt);
 
-        void
-        FastDetect(const cv::Mat &img, const cv::Mat &imgSem, const std::map<int, std::vector<cv::Point2i>> &boundary,
+        void FastDetect(const cv::Mat &img, const cv::Mat &imgSem, const std::map<int, std::vector<cv::Point2i>> &boundary,
                    std::map<int, std::vector<cv::Point2f>> &pt);
 
-        void
-        FastDetect(const cv::Mat &img, const cv::Mat &imgSem, const std::map<int, std::vector<cv::Point2i>> &boundary,
+        void FastDetect(const cv::Mat &img, const cv::Mat &imgSem, const std::map<int, std::vector<cv::Point2i>> &boundary,
                    std::map<int, std::vector<cv::Point2f>> &ptCur,
                    const std::map<int, std::vector<cv::Point2f>> &ptLast);
 
+        void FastDetectFill(const cv::Mat &img, const cv::Mat &imgSem, const std::map<int, std::vector<cv::Point2i>> &boundary,
+                                          std::map<int, std::vector<cv::Point2f>> &pt);
+
         /// OpticalFlow
         void OpticalFlowPyrLK(const cv::Mat &imgCur, const cv::Mat &imgLast, const cv::Mat &imgSem,
-                              std::map<int, std::vector<cv::Point2f>> &ptCur,
+                              std::map<int, std::vector<cv::Point2f>> &ptCur, std::map<int, std::vector<int>> &OptFlowID,
                               const std::map<int, std::vector<cv::Point2f>> &ptLast);
 
         /// StereoMatch
@@ -50,13 +52,17 @@ namespace ORB_SLAM2 {
         void ComputeDepth(const cv::Mat &imgDisp, const std::map<int, std::vector<cv::Point2f>> &pt,
                           std::map<int, std::vector<float>> &depth);
 
-        void RemoveOutliers(std::map<int, std::vector<float>> &depth);
+
+        /// Compute Poses
+        std::vector<cv::Point3f> ComputePoses(std::map<int, std::vector<cv::Point2f>> &ptCur, std::map<int, std::vector<cv::Point2f>> &ptLast, cv::Mat Tcw,
+                          std::map<int, std::vector<int>> &OptFlowID, std::map<int, std::vector<float>> &depth,std::map<int, cv::Mat>& poses);
 
         /// other
-        void ComputeLabelAndBoundary(const cv::Mat &imgSem, std::set<int> &label,
-                                     std::map<int, std::vector<cv::Point2i>> &boundary);
+        void ComputeLabelAndBoundary(const cv::Mat &imgSem, std::set<int> &label, std::map<int, std::vector<cv::Point2i>> &boundary);
 
         void DrawBoundary(const cv::Mat &img, const std::map<int, std::vector<cv::Point2i>> &boundary);
+
+        void Setbf(float bf);
 
     private:
 
@@ -69,7 +75,9 @@ namespace ORB_SLAM2 {
         int mPreFilterCap;
         int mUniquenessRatio;
         int mSpeckleRange;
-        float mbf;
+
+        float mbf, mfx, mfy, mcx, mcy;
+        cv::Mat mK;
 
     };
 

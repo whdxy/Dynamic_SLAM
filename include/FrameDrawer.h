@@ -63,10 +63,7 @@ protected:
     int N;
     vector<cv::KeyPoint> mvCurrentKeys;
 
-    std::map<int, std::vector<cv::KeyPoint>> mmCurrentKeysDynamic;
-    std::map<int, std::vector<float>> mmCurrentDepthDynamic;
-    std::map<int, std::vector<cv::Point2i>> mmCurrentBoundaryDynamic;
-    //static int nLabelMin; /// new 标记最小标签id
+    std::map<int, std::vector<cv::Point2f>> mmDynamicKeys;
 
     vector<bool> mvbMap, mvbVO;
     bool mbOnlyTracking;

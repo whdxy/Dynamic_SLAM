@@ -288,6 +288,10 @@ void LocalMapping::CreateNewMapPoints()
             const int &idx1 = vMatchedIndices[ikp].first;
             const int &idx2 = vMatchedIndices[ikp].second;
 
+            /// new
+            if(mpCurrentKeyFrame->mvDynamic[idx1])
+                continue;
+
             const cv::KeyPoint &kp1 = mpCurrentKeyFrame->mvKeysUn[idx1];
             const float kp1_ur=mpCurrentKeyFrame->mvuRight[idx1];
             bool bStereo1 = kp1_ur>=0;

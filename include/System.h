@@ -36,6 +36,7 @@
 #include "ORBVocabulary.h"
 #include "Viewer.h"
 
+
 namespace ORB_SLAM2
 {
 
@@ -45,6 +46,7 @@ class Map;
 class Tracking;
 class LocalMapping;
 class LoopClosing;
+
 
 class System
 {

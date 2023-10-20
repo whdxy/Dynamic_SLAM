@@ -36,6 +36,7 @@ FrameDrawer::FrameDrawer(Map* pMap):mpMap(pMap)
     mIm = cv::Mat(480,640,CV_8UC3, cv::Scalar(0,0,0));
 }
 
+
 cv::Mat FrameDrawer::DrawFrame()
 {
     cv::Mat im;
@@ -83,131 +84,6 @@ cv::Mat FrameDrawer::DrawFrame()
             if(vMatches[i]>=0)
             {
                 cv::line(im,vIniKeys[i].pt,vCurrentKeys[vMatches[i]].pt,
-                        cv::Scalar(0,255,0));
-            }
-        }        
-    }
-    else if(state==Tracking::OK) //TRACKING
-    {
-        mnTracked=0;
-        mnTrackedVO=0;
-        const float r = 5;
-        const int n = vCurrentKeys.size();
-        for(int i=0;i<n;i++)
-        {
-            if(vbVO[i] || vbMap[i])
-            {
-                cv::Point2f pt1,pt2;
-                pt1.x=vCurrentKeys[i].pt.x-r;
-                pt1.y=vCurrentKeys[i].pt.y-r;
-                pt2.x=vCurrentKeys[i].pt.x+r;
-                pt2.y=vCurrentKeys[i].pt.y+r;
-
-                int classid=vCurrentKeys[i].class_id;
-
-                // This is a match to a MapPoint in the map
-                if(vbMap[i])
-                {
-                    if(classid == 26 ||  classid == 27 || classid == 28 || classid == 29 || classid == 30 || classid == 31 ||  classid == 32 || classid == 33){
-                        cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
-                        cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
-                    }
-                    else{
-                        cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
-                        cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
-                    }
-
-                    mnTracked++;
-                }
-                else // This is match to a "visual odometry" MapPoint created in the last frame
-                {
-                    cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
-                    cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
-                    mnTrackedVO++;
-                }
-            }
-        }
-    }
-
-    // test 20230829
-    /*
-    ostringstream buffer;
-    buffer << "ImageSemantic_keypoints_" << mFrameId << ".png";
-    string imgfile = buffer.str();
-    string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
-    cv::imwrite(imgpath, im);
-     */
-
-
-    cv::Mat imWithInfo;
-    DrawTextInfo(im,state, imWithInfo);
-
-    return imWithInfo;
-}
-
-cv::Mat FrameDrawer::DrawFrameNew()
-{
-    cv::Mat im, imDynamic;
-    vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
-    vector<int> vMatches; // Initialization: correspondeces with reference keypoints
-    vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
-    std::map<int, std::vector<cv::KeyPoint>> mCurrentKeysDynamic; /// new, KeyPointsDynamic in current frame
-    std::map<int, std::vector<float>> mDepthDynamic;
-    std::map<int, std::vector<cv::Point2i>> mBoundaryDynamic;
-
-    vector<bool> vbVO, vbMap; // Tracked MapPoints in current frame
-    int state; // Tracking state
-
-    //Copy variables within scoped mutex
-    {
-        unique_lock<mutex> lock(mMutex);
-        state=mState;
-        if(mState==Tracking::SYSTEM_NOT_READY)
-            mState=Tracking::NO_IMAGES_YET;
-
-        mIm.copyTo(im);
-        mIm.copyTo(imDynamic);
-
-        if(mState==Tracking::NOT_INITIALIZED)
-        {
-            vCurrentKeys = mvCurrentKeys;
-            mCurrentKeysDynamic=mmCurrentKeysDynamic;
-            mDepthDynamic=mmCurrentDepthDynamic;
-            mBoundaryDynamic=mmCurrentBoundaryDynamic;
-            vIniKeys = mvIniKeys;
-            vMatches = mvIniMatches;
-        }
-        else if(mState==Tracking::OK)
-        {
-            vCurrentKeys = mvCurrentKeys;
-            mCurrentKeysDynamic=mmCurrentKeysDynamic;
-            mDepthDynamic=mmCurrentDepthDynamic;
-            mBoundaryDynamic=mmCurrentBoundaryDynamic;
-            vbVO = mvbVO;
-            vbMap = mvbMap;
-        }
-        else if(mState==Tracking::LOST)
-        {
-            vCurrentKeys = mvCurrentKeys;
-            mCurrentKeysDynamic=mmCurrentKeysDynamic;
-            mDepthDynamic=mmCurrentDepthDynamic;
-            mBoundaryDynamic=mmCurrentBoundaryDynamic;
-        }
-    } // destroy scoped mutex -> release mutex
-
-    if(im.channels()<3) //this should be always true
-        cvtColor(im,im,CV_GRAY2BGR);
-    if(imDynamic.channels()<3) //this should be always true
-        cvtColor(imDynamic,imDynamic,CV_GRAY2BGR);
-
-    //Draw
-    if(state==Tracking::NOT_INITIALIZED) //INITIALIZING
-    {
-        for(unsigned int i=0; i<vMatches.size(); i++)
-        {
-            if(vMatches[i]>=0)
-            {
-                cv::line(im,vIniKeys[i].pt,vCurrentKeys[vMatches[i]].pt,
                          cv::Scalar(0,255,0));
             }
         }
@@ -228,7 +104,119 @@ cv::Mat FrameDrawer::DrawFrameNew()
                 pt2.x=vCurrentKeys[i].pt.x+r;
                 pt2.y=vCurrentKeys[i].pt.y+r;
 
-                int classid=vCurrentKeys[i].class_id;
+                // This is a match to a MapPoint in the map
+                if(vbMap[i])
+                {
+                    cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
+                    cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
+                    mnTracked++;
+                }
+                else // This is match to a "visual odometry" MapPoint created in the last frame
+                {
+                    cv::rectangle(im,pt1,pt2,cv::Scalar(255,0,0));
+                    cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(255,0,0),-1);
+                    mnTrackedVO++;
+                }
+            }
+        }
+    }
+
+    /// save
+    //cv::imwrite("/home/whd/SLAM/pic20231017/keypoints1.png", im);
+    //cv::waitKey(1000);
+
+    cv::Mat imWithInfo;
+    DrawTextInfo(im,state, imWithInfo);
+
+    return imWithInfo;
+}
+
+cv::Mat FrameDrawer::DrawFrameNew()
+{
+    cv::Mat im;
+    vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
+    vector<int> vMatches; // Initialization: correspondeces with reference keypoints
+    vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
+    vector<bool> vbVO, vbMap; // Tracked MapPoints in current frame
+    int state; // Tracking state
+
+    std::map<int, std::vector<cv::Point2f>> mDynamicKeys; ///new
+
+    //Copy variables within scoped mutex
+    {
+        unique_lock<mutex> lock(mMutex);
+        state=mState;
+        if(mState==Tracking::SYSTEM_NOT_READY)
+            mState=Tracking::NO_IMAGES_YET;
+
+        mIm.copyTo(im);
+
+        if(mState==Tracking::NOT_INITIALIZED)
+        {
+            vCurrentKeys = mvCurrentKeys;
+            vIniKeys = mvIniKeys;
+            vMatches = mvIniMatches;
+
+            mDynamicKeys = mmDynamicKeys;
+        }
+        else if(mState==Tracking::OK)
+        {
+            vCurrentKeys = mvCurrentKeys;
+            vbVO = mvbVO;
+            vbMap = mvbMap;
+
+            mDynamicKeys = mmDynamicKeys;
+        }
+        else if(mState==Tracking::LOST)
+        {
+            vCurrentKeys = mvCurrentKeys;
+            mDynamicKeys = mmDynamicKeys;
+        }
+    } // destroy scoped mutex -> release mutex
+
+    if(im.channels()<3) //this should be always true
+        cvtColor(im,im,CV_GRAY2BGR);
+
+    //Draw
+    if(state==Tracking::NOT_INITIALIZED) //INITIALIZING
+    {
+        for(unsigned int i=0; i<vMatches.size(); i++)
+        {
+            if(vMatches[i]>=0)
+            {
+                cv::line(im,vIniKeys[i].pt,vCurrentKeys[vMatches[i]].pt,
+                         cv::Scalar(0,255,0));
+            }
+        }
+
+        const float r = 5;
+        for(auto it=mDynamicKeys.begin(), itend=mDynamicKeys.end(); it!=itend; it++){
+            for(int i=0; i<it->second.size(); i++){
+                cv::Point2f pt1,pt2;
+                pt1.x=it->second[i].x-r;
+                pt1.y=it->second[i].y-r;
+                pt2.x=it->second[i].x+r;
+                pt2.y=it->second[i].y+r;
+                cv::rectangle(im,pt1,pt2,cv::Scalar(0,0,255));
+                cv::circle(im,it->second[i],2,cv::Scalar(0,0,255),-1);
+            }
+        }
+    }
+    else if(state==Tracking::OK) //TRACKING
+    {
+        mnTracked=0;
+        mnTrackedVO=0;
+        const float r = 5;
+        const int n = vCurrentKeys.size();
+        for(int i=0;i<n;i++)
+        {
+            if(vbVO[i] || vbMap[i])
+            {
+                cv::Point2f pt1,pt2;
+                pt1.x=vCurrentKeys[i].pt.x-r;
+                pt1.y=vCurrentKeys[i].pt.y-r;
+                pt2.x=vCurrentKeys[i].pt.x+r;
+                pt2.y=vCurrentKeys[i].pt.y+r;
 
                 // This is a match to a MapPoint in the map
                 if(vbMap[i])
@@ -246,55 +234,40 @@ cv::Mat FrameDrawer::DrawFrameNew()
             }
         }
 
-        auto it=mCurrentKeysDynamic.begin(), itend=mCurrentKeysDynamic.end();
-        auto itdepth=mDepthDynamic.begin(), itenddepth=mDepthDynamic.end();
-        for( ; it!=itend; it++,itdepth++)
-        {
-            int label = it->first;
-            std::vector<cv::KeyPoint> vkp = it->second;
-            std::vector<float> vd = itdepth->second;
-            cv::Scalar scalar;
-            ChooseColor(label, scalar);
-            auto itkp=vkp.begin(), itendkp=vkp.end();
-            auto itd=vd.begin(), itendd=vd.end();
-            for( ; itkp!=itendkp; itkp++, itd++){
-                if(*itd > 0)
-                    cv::circle(im,itkp->pt,3,scalar,-1);
+        for(auto it=mDynamicKeys.begin(), itend=mDynamicKeys.end(); it!=itend; it++){
+            for(int i=0; i<it->second.size(); i++){
+                cv::Point2f pt1,pt2;
+                pt1.x=it->second[i].x-r;
+                pt1.y=it->second[i].y-r;
+                pt2.x=it->second[i].x+r;
+                pt2.y=it->second[i].y+r;
+                cv::rectangle(im,pt1,pt2,cv::Scalar(0,0,255));
+                cv::circle(im,it->second[i],2,cv::Scalar(0,0,255),-1);
             }
-            //cout << "label: " << label << "  num:" << vkp.size() << endl;
         }
-    }
-    //cout << "fram id: " << mFrameId << "  ---------" << endl;
 
-    // test 20230829 保存图片
+        int num=0;
+        for(auto it=mDynamicKeys.begin(), itend=mDynamicKeys.end(); it!=itend; it++){
+            num+=it->second.size();
+        }
+        //cout << "FD id:" << mFrameId << " point's num:" << num << endl;
+
+    }
+
+    /// save
+    //cv::imwrite("/home/whd/SLAM/pic20231017/keypoints1.png", im);
+    //cv::waitKey(1000);
+    // test 20230829
     /*
     ostringstream buffer;
     buffer << "ImageSemantic_keypoints_" << mFrameId << ".png";
     string imgfile = buffer.str();
     string imgpath = "/home/whd/SLAM/Dynamic_SLAM/Test/result/pic/" + imgfile;
     cv::imwrite(imgpath, im);
-    */
-    /// 上面是show特帧点和像素点
-    /// -------------------
-    /// 下面show动态物体速度
+     */
 
-    for(auto itBoundary=mBoundaryDynamic.begin(), itBoundaryend=mBoundaryDynamic.end() ; itBoundary!=itBoundaryend; itBoundary++)
-    {
-        //int label = itBoundaryend->first;
-        //std::vector<cv::Point2i> vp = itBoundary->second;
-        cv::Point2i p1=itBoundary->second[0];
-        cv::Point2i p2=itBoundary->second[1];
-        cv::rectangle(imDynamic, p1, p2, cv::Scalar(0,255,0), 2);
-    }
-
-
-
-    cv::Mat im_combine(im.rows*2, im.cols, im.type());
-    //cout << "im: " << im.size() << " " << im.type() << " im_combine: " << im_combine.size() << " " << im_combine.type() << endl;
-    im.copyTo(im_combine.rowRange(0,im.rows).colRange(0,im.cols));
-    imDynamic.copyTo(im_combine.rowRange(im.rows,im.rows*2).colRange(0,im.cols));
     cv::Mat imWithInfo;
-    DrawTextInfo(im_combine,state, imWithInfo);
+    DrawTextInfo(im,state, imWithInfo);
 
     return imWithInfo;
 }
@@ -569,9 +542,7 @@ void FrameDrawer::Update(Tracking *pTracker)
     pTracker->mImGray.copyTo(mIm);
     //pTracker->mImGraySemantic.copyTo(mIm); // test 20230901
     mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;
-    mmCurrentKeysDynamic=pTracker->mCurrentFrame.mmKeysDynamic;
-    mmCurrentDepthDynamic=pTracker->mCurrentFrame.mmDepthDynamic;
-    mmCurrentBoundaryDynamic=pTracker->mCurrentFrame.mmBoundaryDynamic;
+    mmDynamicKeys=pTracker->mCurrentFrame.mmDynamicKeys;
 
     N = mvCurrentKeys.size();
     mvbVO = vector<bool>(N,false);

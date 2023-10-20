@@ -188,6 +188,8 @@ public:
     const int mnMaxY;
     const cv::Mat mK;
 
+    /// new for dynamic
+    std::vector<bool> mvDynamic;
 
     // The following variables need to be accessed trough a mutex to be thread safe.
 protected:
