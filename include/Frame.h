@@ -164,7 +164,7 @@ public:
     ///=============
     std::map<int, std::vector<cv::KeyPoint>> mmKeysDynamic, mmKeysRightDynamic; // 储存各个实例类中的像素点
     std::map<int, std::vector<float>> mmDepthDynamic;  // 储存各个实例类中像素点的深度
-    std::map<int, std::vector<cv::Point2i>> mmBoundaryDynamic;  // 储存各个实例类中像素点的深度
+    //std::map<int, std::vector<cv::Point2i>> mmBoundaryDynamic;  // 储存各个实例类中像素点的深度
     std::map<int, std::vector<cv::Point3f*>> mmMapPointsDynamic;
     std::map<int, float> mmDepthInstanceDynamic;
     static int nLabelMin; /// new 标记最小标签id

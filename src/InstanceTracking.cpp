@@ -181,16 +181,19 @@ namespace ORB_SLAM2 {
                                       const std::map<int, std::vector<cv::Point2i>> &boundary,
                                       std::map<int, std::vector<cv::Point2f>> &pt) {
 
+        //std::cout << "boundary：" << boundary.size() << std::endl;
+
         /// step1、提取特征点
         std::vector<cv::KeyPoint> kp;
         FAST->detect(img, kp);
 
-        /// step2、对特帧点进行过滤
+        /// step2、对新提取的特征点进行过滤
         /// 1、车辆上特征点 2、边界之内
         std::map<int, std::vector<cv::Point2f>> ptNew;
         for (auto &KP: kp) {
             int label = imgSem.at<char16_t>(KP.pt.y, KP.pt.x);
             if (label > 26000 && label < 27000) {
+                //std::cout << "  label：" << label << std::endl;
                 auto it = boundary.find(label);
                 if (it != boundary.end()) {
                     cv::Point2i p1, p2;
@@ -209,7 +212,35 @@ namespace ORB_SLAM2 {
             }
         }
 
-        /// step3、将广告检测出的特征点加入到光流追踪到的特征点中（比较当前帧fast提取与前一帧光流追踪的角点差）
+        /// step3、将刚刚检测出的特征点加入到光流追踪到的特征点中（比较当前帧fast提取与前一帧光流追踪的角点差）
+        //std::cout << "*****************************" << std::endl;
+        for (auto it = ptNew.begin(), itend = ptNew.end(); it != itend; it++){
+            int label = it->first;
+            auto itOld = pt.find(label);
+            if (itOld != pt.end()){
+                std::set<cv::Point2f, PointCompare> spt;
+                spt.insert(itOld->second.begin(), itOld->second.end());
+                //std::cout << "spt" << spt.size() << std::endl;
+                for(auto itPoint=it->second.begin(),itPointend=it->second.end(); itPoint!=itPointend; itPoint++){
+                    auto itPointOld = spt.find(*itPoint);
+                    if(itPointOld==spt.end()){
+                        //std::cout << "123" << std::endl;
+
+                    }
+
+                }
+            }
+            else{
+                std::vector<cv::Point2f> vpTemp = it->second;
+                pt.insert(std::pair<int, std::vector<cv::Point2f>>(label, vpTemp));
+                //itOld->second.insert(itOld->second.end(), it->second.begin(),it->second.end());
+                std::cout << "2222" << std::endl;
+            }
+        }
+
+
+
+
         /*
         for (auto it = pt.begin(), itend = pt.end(); it != itend; it++) {
 
@@ -226,14 +257,19 @@ namespace ORB_SLAM2 {
                 std::vector<cv::Point2f> diff;
 
                 // diff保存Last中有，但Cur没有点角点
-                std::set_difference(ptL.begin(), ptL.end(), ptC.begin(), ptC.end(), std::back_inserter(diff),
+                //std::set_difference(ptL.begin(), ptL.end(), ptC.begin(), ptC.end(), std::back_inserter(diff),
+                //                    [](cv::Point2f pt1, cv::Point2f pt2) { return pt1.x == pt2.x && pt1.y == pt2.y; });
+
+                std::set_difference(ptC.begin(), ptC.end(), ptL.begin(), ptL.end(), std::back_inserter(diff),
                                     [](cv::Point2f pt1, cv::Point2f pt2) { return pt1.x == pt2.x && pt1.y == pt2.y; });
 
-                itNew->second.insert(itNew->second.end(), diff.begin(), diff.end());
+                //itNew->second.insert(itNew->second.end(), diff.begin(), diff.end());
             }
         }
          */
+
         // 用set融合特帧点
+        /*
         std::map<int, std::set<cv::Point2f, PointCompare>> mpt;
         for(auto it=pt.begin(), itend=pt.end(); it!=itend; it++){
 
@@ -248,22 +284,32 @@ namespace ORB_SLAM2 {
 
         }
 
-        /// TODO
         //
+        for(auto it=mpt.begin(), itend=mpt.end(); it!=itend; it++){
+            int label = it->first;
+            std::set<cv::Point2f, PointCompare> sTemp=it->second;
+            auto itpt=pt.find(label);
+            if(itpt!=pt.end())
+                it
+        }
+
         std::vector<cv::Point2f> vptTemp=std::vector<cv::Point2f>(spt.begin(),spt.end());
         pt.swap(vptTemp);
+         */
 
     }
 
 
     // 1017证明：每个图像分开光流与整体光流效果一样
+    // OptFlowID 当前在特帧点与上一帧点对应id
     void InstanceTracking::OpticalFlowPyrLK(const cv::Mat &imgCur, const cv::Mat &imgLast, const cv::Mat &imgSem,
                                             std::map<int, std::vector<cv::Point2f>> &ptCur,  std::map<int, std::vector<int>> &OptFlowID,
                                             const std::map<int, std::vector<cv::Point2f>> &ptLast) {
 
-        std::map<int, std::vector<cv::Point2f>> ptCur_temp;
+        std::map<int, std::vector<cv::Point2f>> ptCurTemp;
+        std::map<int, std::vector<int>> OptFlowIDTemp;
         // 可视化参数
-        std::vector<cv::Point2f> pt_show_cur, pt_show_last;
+        //std::vector<cv::Point2f> pt_show_cur, pt_show_last;
 
         //std::cout << "========================" << std::endl;
         for (auto it = ptLast.begin(), itend = ptLast.end(); it != itend; it++) {
@@ -273,8 +319,8 @@ namespace ORB_SLAM2 {
             if(vp.size() < 20)
                 continue;
 
-            ptCur_temp.insert(std::pair<int, std::vector<cv::Point2f>>(label, {}));
-            OptFlowID.insert(std::pair<int, std::vector<int>>(label, {}));
+            ptCurTemp.insert(std::pair<int, std::vector<cv::Point2f>>(label, {}));
+            OptFlowIDTemp.insert(std::pair<int, std::vector<int>>(label, {}));
 
             std::vector<uchar> status;
             std::vector<float> error;
@@ -284,22 +330,25 @@ namespace ORB_SLAM2 {
             for (int i = 0; i < status.size(); i++) {
                 if (status[i]) {
                     if (imgSem.at<char16_t>(pt_cur[i].y, pt_cur[i].x) == label) {
-                        ptCur_temp[label].push_back(pt_cur[i]);
-                        OptFlowID[label].push_back(i);
-                        pt_show_cur.push_back(pt_cur[i]);
-                        pt_show_last.push_back(vp[i]);
+                        ptCurTemp[label].push_back(pt_cur[i]);
+                        OptFlowIDTemp[label].push_back(i);
+                        //pt_show_cur.push_back(pt_cur[i]);
+                        //pt_show_last.push_back(vp[i]);
                     }
                 }
             }
         }
 
         /// 删除fast角点小于5个的label
-        for (auto it = ptCur_temp.begin(), itend = ptCur_temp.end(); it != itend; it++) {
-            if (it->second.size() > 5)
+        for (auto it = ptCurTemp.begin(), itend = ptCurTemp.end(); it != itend; it++) {
+            if (it->second.size() > 5){
                 ptCur.insert(std::pair<int, std::vector<cv::Point2f>>(it->first, it->second));
+                OptFlowID.insert(std::pair<int, std::vector<int>>(it->first, OptFlowIDTemp[it->first]));
+            }
         }
 
         /// 可视化
+        /*
         cv::Mat img2_CV;
         cv::cvtColor(imgCur, img2_CV, cv::COLOR_GRAY2BGR);
 
@@ -307,6 +356,7 @@ namespace ORB_SLAM2 {
             cv::circle(img2_CV, pt_show_cur[i], 2, cv::Scalar(0, 250, 0), 2);
             cv::line(img2_CV, pt_show_last[i], pt_show_cur[i], cv::Scalar(0, 250, 0));
         }
+         */
 
         //cv::imshow("tracked by opencv", img2_CV);
         //cv::imwrite("/home/whd/SLAM/pic20231017/optical1.png", img2_CV);
@@ -533,11 +583,11 @@ namespace ORB_SLAM2 {
             Mod.at<float>(1,0) = d.at<double>(1,0); Mod.at<float>(1,1) = d.at<double>(1,1); Mod.at<float>(1,2) = d.at<double>(1,2); Mod.at<float>(1,3) = Tvec.at<double>(1,0);
             Mod.at<float>(2,0) = d.at<double>(2,0); Mod.at<float>(2,1) = d.at<double>(2,1); Mod.at<float>(2,2) = d.at<double>(2,2); Mod.at<float>(2,3) = Tvec.at<double>(2,0);
 
-            std::cout << "label:" << label << " matches:" << pre_3d.size() << std::endl << Mod << std::endl;
+            std::cout << "label:" << label << " matches:" << pre_3d.size() << std::endl;
+            //std::cout << "label:" << label << " matches:" << pre_3d.size() << std::endl << Mod << std::endl;
         }
 
-
-        std::cout << "=================" << std::endl;
+        std::cout << "=======================" << std::endl;
         return vP3d;
     }
 

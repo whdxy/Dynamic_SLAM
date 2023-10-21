@@ -539,10 +539,10 @@ void Tracking::StereoInitialization()
         /// ====================
         /// 下面是动态点
         /// new
-        mpInstanceTracking->ComputeLabelAndBoundary(mImGraySemantic, mCurrentFrame.msDynamicLabel, mCurrentFrame.mmBoundaryDynamic);
+        mpInstanceTracking->ComputeLabelAndBoundary(mImGraySemantic, mCurrentFrame.msDynamicLabel, mCurrentFrame.mmDynamicBoundary);
         //cout << "id:" << mCurrentFrame.mnId << " " << mCurrentFrame.msDynamicLabel.size() << endl;
         //mpInstanceTracking->DrawBoundary(mImGray, mCurrentFrame.mmBoundaryDynamic);
-        mpInstanceTracking->FastDetect(mImGray, mImGraySemantic, mCurrentFrame.mmBoundaryDynamic, mCurrentFrame.mmDynamicKeys);
+        mpInstanceTracking->FastDetect(mImGray, mImGraySemantic, mCurrentFrame.mmDynamicBoundary, mCurrentFrame.mmDynamicKeys);
         int num=0;
         for(auto it=mCurrentFrame.mmDynamicKeys.begin(), itend=mCurrentFrame.mmDynamicKeys.end(); it!=itend; it++){
             num+=it->second.size();
@@ -941,10 +941,11 @@ bool Tracking::TrackWithMotionModel()
 
 bool Tracking::TrackDynamic(){
 
-    /// stpe1、追踪并计算视察深度
+    /// stpe1、追踪
     mpInstanceTracking->OpticalFlowPyrLK(mImGray, mImGrayLast, mImGraySemantic,mCurrentFrame.mmDynamicKeys, mCurrentFrame.mmDynamicOptFlowID, mLastFrame.mmDynamicKeys);
-    mpInstanceTracking->ComputeDisp(mImGray,mImGrayRight,mCurrentFrame.mmDynamicKeys, mCurrentFrame.mmDynamicDepth, 11, 0, 64);
 
+
+    /*
     int num=0;
     for(auto it=mLastFrame.mmDynamicKeys.begin(), itend=mLastFrame.mmDynamicKeys.end(); it!=itend; it++){
         num+=it->second.size();
@@ -958,6 +959,7 @@ bool Tracking::TrackDynamic(){
     }
     cout << "id:" << mCurrentFrame.mnId << " point's num:" << num << endl;
     cout << "========" << endl;
+     */
 
     /// stpe2、根据追踪匹配结果计算动态物体位姿变换，并返回地图点（地图点：前一帧fast && 与当前帧跟踪匹配上 && 具有深度）
     cv::Mat Tcw = mCurrentFrame.mTcw;
@@ -969,7 +971,11 @@ bool Tracking::TrackDynamic(){
     for(auto p: vp3d)
         mpMap->AddMapPointDynamic(p);
 
+    /// step3、补充特征点并计算深度
+    mpInstanceTracking->ComputeLabelAndBoundary(mImGraySemantic, mCurrentFrame.msDynamicLabel, mCurrentFrame.mmDynamicBoundary);
+    //std::cout << "Boundary：" << mCurrentFrame.mmDynamicBoundary.size() << std::endl;
     mpInstanceTracking->FastDetectFill(mImGray, mImGraySemantic, mCurrentFrame.mmDynamicBoundary, mCurrentFrame.mmDynamicKeys);
+    mpInstanceTracking->ComputeDisp(mImGray,mImGrayRight,mCurrentFrame.mmDynamicKeys, mCurrentFrame.mmDynamicDepth, 11, 0, 64);
 
     return true;
 }

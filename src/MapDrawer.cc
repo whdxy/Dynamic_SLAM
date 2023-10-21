@@ -94,7 +94,7 @@ void MapDrawer::DrawMapPointsDynamic()
     auto itend=vMPsDynamic.end();
     int num=0;
     for(; it!=itend; it++){
-        glColor3f(0.0,0.0,1.0);
+        glColor3f(0.50,0.17,0.88);
         for(int i=0; i<vMPsDynamic.size(); i++){
             glVertex3f(it->x,it->y,it->z);
         }
