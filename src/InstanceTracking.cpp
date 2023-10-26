@@ -10,6 +10,9 @@ namespace ORB_SLAM2 {
 
     InstanceTracking::InstanceTracking(float bf, float fx, float fy, float cx, float cy)
     : mbf(bf), mfx(fx), mfy(fy), mcx(cx), mcy(cy) {
+
+        mH = 1.5;
+
         mK=cv::Mat::zeros(3, 3, CV_64FC1);
 
         mK.at<double>(0, 0) = mfx;
@@ -24,7 +27,7 @@ namespace ORB_SLAM2 {
         FAST = cv::FastFeatureDetector::create(threshold);
     }
 
-// old: 返回未分类的fast角点
+    // old: 返回未分类的fast角点
     void InstanceTracking::FastDetect(const cv::Mat &img, const cv::Mat &imgSem,
                                       const std::map<int, std::vector<cv::Point2i>> &boundary,
                                       std::vector<cv::Point2f> &pt) {
@@ -234,12 +237,9 @@ namespace ORB_SLAM2 {
                 std::vector<cv::Point2f> vpTemp = it->second;
                 pt.insert(std::pair<int, std::vector<cv::Point2f>>(label, vpTemp));
                 //itOld->second.insert(itOld->second.end(), it->second.begin(),it->second.end());
-                std::cout << "2222" << std::endl;
+                //std::cout << "2222" << std::endl;
             }
         }
-
-
-
 
         /*
         for (auto it = pt.begin(), itend = pt.end(); it != itend; it++) {
@@ -376,32 +376,8 @@ namespace ORB_SLAM2 {
         SGBM->setMode(cv::StereoSGBM::MODE_HH);
     }
 
-    void InstanceTracking::ComputeDisp(const cv::Mat &imgL, const cv::Mat &imgR, cv::Mat &img_out, int SADWindowSize,
-                                       int MinDisparity, int NumDisparities) {
 
-        SGBM->setBlockSize(SADWindowSize);
-        int p1 = 8 * mChannels * SADWindowSize * SADWindowSize;
-        int p2 = 32 * mChannels * SADWindowSize * SADWindowSize;
-        SGBM->setP1(p1);
-        SGBM->setP2(p2);
-
-        SGBM->setMinDisparity(MinDisparity);
-        SGBM->setNumDisparities(NumDisparities);
-
-        cv::Mat temp;
-        SGBM->compute(imgL, imgR, temp);
-
-        temp.convertTo(temp, CV_32F, 1.0 / 16);
-        img_out = cv::Mat::zeros(temp.size(), CV_8UC1);
-        cv::normalize(temp, img_out, 0, 255, cv::NORM_MINMAX);
-        cv::convertScaleAbs(img_out, img_out);
-
-        // show
-        //cv::imshow("img_out", img_out);
-        //cv::waitKey(0);
-    }
-
-    // new
+    // old（整体匹配，时间消耗大）
     void InstanceTracking::ComputeDisp(const cv::Mat &imgL, const cv::Mat &imgR,
                                        const std::map<int, std::vector<cv::Point2f>> &pt,
                                        std::map<int, std::vector<float>> &depth,
@@ -420,20 +396,155 @@ namespace ORB_SLAM2 {
         SGBM->compute(imgL, imgR, temp);
         //std::cout << "type: " << temp.type() << std::endl;
         temp.convertTo(temp, CV_32F, 1.0 / 16);
-
-        //cv::Mat imgDisp = cv::Mat::zeros(temp.size(), CV_8UC1);
-        //cv::normalize(temp,imgDisp, 0, 255 ,cv::NORM_MINMAX);
-        //cv::convertScaleAbs(imgDisp,imgDisp);
-
         //std::cout << "type: " << temp.type() << std::endl;
 
         ComputeDepth(temp, pt, depth);
 
         // show
+        //cv::Mat imgDisp = cv::Mat::zeros(temp.size(), CV_8UC1);
+        //cv::normalize(temp,imgDisp, 0, 255 ,cv::NORM_MINMAX);
+        //cv::convertScaleAbs(imgDisp,imgDisp);
+
         //cv::imshow("imgDisp", imgDisp);
+        //cv::imwrite("/home/whd/SLAM/pic20231017/imgDisp.png", imgDisp);
         //cv::waitKey(0);
     }
 
+    // new（实例区域匹配）
+    void InstanceTracking::ComputeDisp(const cv::Mat &imgL, const cv::Mat &imgR, const std::map<int, std::vector<cv::Point2i>> &boundary,
+                     const std::map<int, std::vector<cv::Point2f>> &pt, std::map<int, std::vector<float>> &depth,
+                     int SADWindowSize, int MinDisparity, int NumDisparities){
+
+        //std::cout << "boundary: " << boundary.size() << std::endl;
+        //std::cout << "pt: " << pt.size() << std::endl;
+
+        SGBM->setBlockSize(SADWindowSize);
+        int p1 = 8 * mChannels * SADWindowSize * SADWindowSize;
+        int p2 = 32 * mChannels * SADWindowSize * SADWindowSize;
+        SGBM->setP1(p1);
+        SGBM->setP2(p2);
+
+        SGBM->setMinDisparity(MinDisparity);
+
+        //const int rate = 3;
+
+        for(auto itBoundary=boundary.begin(), itBoundaryend=boundary.end(); itBoundary != itBoundaryend; itBoundary++){
+            int label = itBoundary->first;
+
+            auto itpt = pt.find(label);
+            if(itpt!=pt.end()){
+                cv::Point2i p1, p2;
+                p1=itBoundary->second[0];
+                p2=itBoundary->second[1];
+
+                int width=p2.x-p1.x;
+                int heigth=p2.y-p1.y;
+
+                // 计算视察，根据视差，设置SGBM的NumDisparities
+                float d = mH*mfy/heigth;
+                float disp = mbf*heigth/(mH*mfy);
+
+                int numDisparities = 16;
+                if(disp<16)
+                    numDisparities = 16;
+                else if(disp<32)
+                    numDisparities = 32;
+                else if(disp<64)
+                    numDisparities = 64;
+                else if(disp<128)
+                    numDisparities = 128;
+
+
+                //std::cout << "label: " << label <<std::endl;
+
+                //std::cout << "boundary: " << p1 << "  " << p2 <<std::endl;
+
+                if(p1.x-numDisparities<0)
+                    width = p2.x;
+                else
+                    width += numDisparities;
+
+                cv::Rect roi(p2.x-width,p1.y,width,heigth);
+                cv::Mat imgL_Rect = imgL(roi);
+                cv::Mat imgR_Rect = imgR(roi);
+
+                /*
+                if(heigth>160)
+                    numDisparities *= 8;
+                else if(heigth>100)
+                    numDisparities *= 4;
+                else if(heigth>100)
+                    numDisparities *= 2;
+                */
+
+                SGBM->setNumDisparities(numDisparities);
+
+                cv::Mat temp;
+                SGBM->compute(imgL_Rect, imgR_Rect, temp);
+                //std::cout << "type: " << temp.type() << std::endl;
+                temp.convertTo(temp, CV_32F, 1.0 / 16);
+
+                std::cout << "label: " << label << " width: " << width << " heigth: " << heigth << " d: " << d <<
+                " disp: " << disp << " numDisparities: " << numDisparities << std::endl;
+
+                cv::Point2f pt_l_u;
+                pt_l_u.x=p2.x-width;
+                pt_l_u.y=p1.y;
+
+                std::vector<cv::Point2f> vpt=itpt->second;
+                std::vector<float> vdepth;
+
+                ComputeDepth(temp, vpt, pt_l_u, depth[label]);
+
+                cv::Mat img_combine(imgL_Rect.rows*3, imgL_Rect.cols, imgL_Rect.type());
+                imgL_Rect.copyTo(img_combine.rowRange(0,imgL_Rect.rows).colRange(0,imgL_Rect.cols));
+                imgR_Rect.copyTo(img_combine.rowRange(imgL_Rect.rows,imgL_Rect.rows*2).colRange(0,imgL_Rect.cols));
+
+                cv::Mat imgDisp = cv::Mat::zeros(temp.size(), CV_8UC1);
+                cv::normalize(temp,imgDisp, 0, 255 ,cv::NORM_MINMAX);
+                cv::convertScaleAbs(imgDisp,imgDisp);
+                imgDisp.copyTo(img_combine.rowRange(imgL_Rect.rows*2,imgL_Rect.rows*3).colRange(0,imgL_Rect.cols));
+
+                //std::string s_ = "/home/whd/SLAM/pic20231017/" + std::to_string(label) + "_disp_" + std::to_string(disp) + ".png";
+                //cv::imwrite(s_, img_combine);
+
+                //cv::imshow(s_,img_combine);
+                //std::string s1 = "/home/whd/SLAM/pic20231017/" + std::to_string(label) + "_left.png";
+                //std::string s2 = "/home/whd/SLAM/pic20231017/" + std::to_string(label) + "_right.png";
+                //cv::imshow("temp",temp);
+                //cv::imshow(s1,imgL_Rect);
+                //cv::imshow(s2,imgR_Rect);
+                //cv::imwrite(s1, imgL_Rect);
+                //cv::imwrite(s2, imgR_Rect);
+                //cv::waitKey(0);
+
+            }
+        }
+
+
+        /*
+        SGBM->setNumDisparities(NumDisparities);
+
+        cv::Mat temp;
+        SGBM->compute(imgL, imgR, temp);
+        //std::cout << "type: " << temp.type() << std::endl;
+        temp.convertTo(temp, CV_32F, 1.0 / 16);
+        //std::cout << "type: " << temp.type() << std::endl;
+
+        ComputeDepth(temp, pt, depth);
+         */
+
+        // show
+        //cv::Mat imgDisp = cv::Mat::zeros(temp.size(), CV_8UC1);
+        //cv::normalize(temp,imgDisp, 0, 255 ,cv::NORM_MINMAX);
+        //cv::convertScaleAbs(imgDisp,imgDisp);
+
+        //cv::imshow("imgDisp", imgDisp);
+        //cv::imwrite("/home/whd/SLAM/pic20231017/imgDisp.png", imgDisp);
+        //cv::waitKey(0);
+    }
+
+    // old
     void InstanceTracking::ComputeDepth(const cv::Mat &imgDisp, const std::map<int, std::vector<cv::Point2f>> &pt,
                                         std::map<int, std::vector<float>> &depth) {
         for (auto it = pt.begin(), itend = pt.end(); it != itend; it++) {
@@ -493,6 +604,73 @@ namespace ORB_SLAM2 {
             }
             //std::cout << std::endl << std::endl;
         }
+    }
+
+    // new
+    void InstanceTracking::ComputeDepth(const cv::Mat &imgDisp, const std::vector<cv::Point2f> &pt, const cv::Point2f &pt_left_upper, std::vector<float> &depth){
+        bool b = false;
+
+        // 计算深度
+        //std::vector<float> vf(pt.size(), -1.0);
+        depth = std::vector<float>(pt.size(), -1.0);
+        for (int i = 0; i < pt.size(); i++) {
+            cv::Point2f p = pt[i];
+            //std:: cout << "imgDisp, " << imgDisp.cols << ", " <<  imgDisp.rows << std::endl
+            //        << "y, " << p.y << "  x, " <<  p.x << std::endl
+            //       << "pt_left_uppery, " << pt_left_upper.y << "  pt_left_upperx," << pt_left_upper.x << std::endl;
+            float disp = imgDisp.at<float>(p.y-pt_left_upper.y, p.x-pt_left_upper.x);
+            if (disp > 0) {
+                float d = mbf / disp;
+                if (d < 30) {
+                    depth[i] = d;
+                    if (!b)
+                        b = true;
+                }
+            }
+        }
+        // 删除离群点
+        float stdev = 3.0; // 标准差
+        while (stdev > 2.5 && b) {
+            int sum = 0, num = 0;
+            stdev = 0.0;
+
+            // 计算平均数
+            for (int i = 0; i < pt.size(); i++) {
+                if (depth[i] > 0) {
+                    //std::cout << depth[it->first][i] << std::endl;
+                    sum += depth[i];
+                    num++;
+                }
+            }
+
+            // 计算标准差
+            float mean = (float) sum / num;
+            for (int i = 0; i < pt.size(); i++) {
+                if (depth[i] > 0) {
+                    stdev += (depth[i] - mean) * (depth[i] - mean);
+                }
+            }
+            stdev = sqrt(stdev / num);
+
+            for (int i = 0; i < pt.size(); i++) {
+                if (depth[i] > 0) {
+                    if (abs(depth[i] - mean) > stdev)
+                        depth[i] = -1.0;
+                }
+            }
+            //std::cout << std::endl << "sum:" << sum << "  num:" << num << "  mean:" << mean << "  stdev:" << stdev << std::endl;
+        }
+
+        /*
+        for (int i = 0; i < pt.size(); i++) {
+            if (depth[i] > 0) {
+                std::cout << " | " << depth[i];
+            }
+        }
+         std::cout << std::endl << std::endl;
+         */
+
+
     }
 
     std::vector<cv::Point3f> InstanceTracking::ComputePoses(std::map<int, std::vector<cv::Point2f>> &ptCur, std::map<int, std::vector<cv::Point2f>> &ptLast, cv::Mat Tcw,
@@ -662,7 +840,4 @@ namespace ORB_SLAM2 {
 
     }
 
-    void InstanceTracking::Setbf(float bf){
-        mbf=bf;
-    }
 }

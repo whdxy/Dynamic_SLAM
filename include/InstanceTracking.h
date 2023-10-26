@@ -39,19 +39,21 @@ namespace ORB_SLAM2 {
         /// StereoMatch
         void StereoMatchingInitialization(int Channels, int PreFilterCap, int UniquenessRatio, int SpeckleRange);
 
-        // old
-        void
-        ComputeDisp(const cv::Mat &imgL, const cv::Mat &imgR, cv::Mat &img_out, int SADWindowSize, int MinDisparity,
-                    int NumDisparities);
-
-        // new
+        // old（整体匹配，时间消耗大）
         void ComputeDisp(const cv::Mat &imgL, const cv::Mat &imgR, const std::map<int, std::vector<cv::Point2f>> &pt,
-                         std::map<int, std::vector<float>> &depth, int SADWindowSize, int MinDisparity,
-                         int NumDisparities);
+                         std::map<int, std::vector<float>> &depth, int SADWindowSize, int MinDisparity, int NumDisparities);
 
+        // new（实例区域匹配）
+        void ComputeDisp(const cv::Mat &imgL, const cv::Mat &imgR, const std::map<int, std::vector<cv::Point2i>> &boundary,
+                         const std::map<int, std::vector<cv::Point2f>> &pt, std::map<int, std::vector<float>> &depth,
+                         int SADWindowSize, int MinDisparity, int NumDisparities);
+
+        // old
         void ComputeDepth(const cv::Mat &imgDisp, const std::map<int, std::vector<cv::Point2f>> &pt,
                           std::map<int, std::vector<float>> &depth);
 
+        // new
+        void ComputeDepth(const cv::Mat &imgDisp, const std::vector<cv::Point2f> &pt, const cv::Point2f &pt_left_upper, std::vector<float> &depth);
 
         /// Compute Poses
         std::vector<cv::Point3f> ComputePoses(std::map<int, std::vector<cv::Point2f>> &ptCur, std::map<int, std::vector<cv::Point2f>> &ptLast, cv::Mat Tcw,
@@ -62,7 +64,6 @@ namespace ORB_SLAM2 {
 
         void DrawBoundary(const cv::Mat &img, const std::map<int, std::vector<cv::Point2i>> &boundary);
 
-        void Setbf(float bf);
 
     private:
 
@@ -77,6 +78,7 @@ namespace ORB_SLAM2 {
         int mSpeckleRange;
 
         float mbf, mfx, mfy, mcx, mcy;
+        float mH;
         cv::Mat mK;
 
     };
