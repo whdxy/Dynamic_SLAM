@@ -146,8 +146,14 @@ void Viewer::Run()
         if(menuShowPoints)
             mpMapDrawer->DrawMapPoints();
 
-        if(menuShowLabels)
+        if(menuShowLabels){
+            //std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
             mpMapDrawer->DrawMapPointsDynamic();
+            //std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+            //double ttrack = std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
+            //cout << "DrawMapPointsDynamic: " << ttrack << endl;
+        }
+
 
         pangolin::FinishFrame();
 

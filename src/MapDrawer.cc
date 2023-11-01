@@ -82,19 +82,23 @@ void MapDrawer::DrawMapPoints()
 
 void MapDrawer::DrawMapPointsDynamic()
 {
-    const vector<cv::Point3f>& vMPsDynamic = mpMap->GetAllMapPointsDynamic();
 
+    const vector<cv::Point3f>& vMPsDynamic = mpMap->GetAllMapPointsDynamic();
     if(vMPsDynamic.empty())
         return;
+
+    set<cv::Point3f> sMPsDynamic(vMPsDynamic.begin(), vMPsDynamic.end());
 
     glPointSize(mPointSize*2);
     glBegin(GL_POINTS);
 
     auto it=vMPsDynamic.begin();
     auto itend=vMPsDynamic.end();
+    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     int num=0;
+
+    glColor3f(0.50,0.17,0.88);
     for(; it!=itend; it++){
-        glColor3f(0.50,0.17,0.88);
         for(int i=0; i<vMPsDynamic.size(); i++){
             glVertex3f(it->x,it->y,it->z);
         }
@@ -115,6 +119,10 @@ void MapDrawer::DrawMapPointsDynamic()
         }
          */
     }
+    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+
+    double t12 = std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
+    cout << "t12: " << t12 << endl;
     glEnd();
 }
 
