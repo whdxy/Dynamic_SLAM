@@ -42,7 +42,7 @@ public:
 
     void AddKeyFrame(KeyFrame* pKF);
     void AddMapPoint(MapPoint* pMP);
-    void AddMapPointDynamic(cv::Point3f pt); ///new
+    void AddMapPointDynamic(cv::Point3f* pt); ///new
     void EraseMapPoint(MapPoint* pMP);
     void EraseKeyFrame(KeyFrame* pKF);
     void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs);
@@ -51,7 +51,7 @@ public:
 
     std::vector<KeyFrame*> GetAllKeyFrames();
     std::vector<MapPoint*> GetAllMapPoints();
-    std::vector<cv::Point3f> GetAllMapPointsDynamic();
+    std::vector<cv::Point3f*> GetAllMapPointsDynamic(); /// new
     std::vector<MapPoint*> GetReferenceMapPoints();
 
     long unsigned int MapPointsInMap();
@@ -83,7 +83,9 @@ public:
 protected:
     std::set<MapPoint*> mspMapPoints;
     std::set<KeyFrame*> mspKeyFrames;
-    std::set<cv::Point3f, PointCompare> msDynamicMapPoints; /// new
+    std::set<cv::Point3f, PointCompare> msDynamicMapPoints; ///old
+    std::set<cv::Point3f*> mspDynamicMapPoints; /// new
+
     //int label_min; /// new 标记最小标签id
 
     std::vector<MapPoint*> mvpReferenceMapPoints;

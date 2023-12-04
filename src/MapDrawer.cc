@@ -83,46 +83,27 @@ void MapDrawer::DrawMapPoints()
 void MapDrawer::DrawMapPointsDynamic()
 {
 
-    const vector<cv::Point3f>& vMPsDynamic = mpMap->GetAllMapPointsDynamic();
-    if(vMPsDynamic.empty())
+    const vector<cv::Point3f*>& vpMPsDynamic = mpMap->GetAllMapPointsDynamic();
+    if(vpMPsDynamic.empty())
         return;
 
-    set<cv::Point3f> sMPsDynamic(vMPsDynamic.begin(), vMPsDynamic.end());
+    set<cv::Point3f*> sMPsDynamic(vpMPsDynamic.begin(), vpMPsDynamic.end());
 
     glPointSize(mPointSize*2);
     glBegin(GL_POINTS);
-
-    auto it=vMPsDynamic.begin();
-    auto itend=vMPsDynamic.end();
-    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-    int num=0;
-
     glColor3f(0.50,0.17,0.88);
-    for(; it!=itend; it++){
-        for(int i=0; i<vMPsDynamic.size(); i++){
-            glVertex3f(it->x,it->y,it->z);
-        }
 
-        /*
-        int label=it->first;
-        std::vector<cv::Point3f*> vp3f=it->second;
-        cv::Scalar scalar;
-        ChooseColor(label, scalar);
-        float r=scalar[0]/255;
-        float g=scalar[1]/255;
-        float b=scalar[2]/255;
-        glColor3f(r,g,b);
-        //glColor3f(1.0,0.0,0.0);
-        for(int i=0; i<vp3f.size(); i++){
-            cv::Point3f* p3f=vp3f[i];
-            glVertex3f(p3f->x,p3f->y,p3f->z);
-        }
-         */
+    //std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+
+    for(set<cv::Point3f*>::iterator sit=sMPsDynamic.begin(), send=sMPsDynamic.end(); sit!=send; sit++)
+    {
+        glVertex3f((*sit)->x,(*sit)->y,(*sit)->z);
     }
+
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 
-    double t12 = std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
-    cout << "t12: " << t12 << endl;
+    //double t12 = std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
+    //cout << "pangolin show: " << t12 << endl;
     glEnd();
 }
 

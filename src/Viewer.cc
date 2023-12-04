@@ -74,6 +74,7 @@ void Viewer::Run()
     pangolin::Var<bool> menuLocalizationMode("menu.Localization Mode",false,true);
     pangolin::Var<bool> menuReset("menu.Reset",false,false);
     pangolin::Var<bool> menuStop("menu.Stop/Start",true,false);
+    pangolin::Var<bool> menuSaveImage("menu.SaveImage",false,false);
 
     // Define Camera Render Object (for view / scene browsing)
     pangolin::OpenGlRenderState s_cam(
@@ -135,6 +136,11 @@ void Viewer::Run()
         else{
             //cout << "menuStop:" << menuStop << endl;
             mpSystem->SetStop(false);
+        }
+
+        if(menuSaveImage){
+            pangolin::SaveWindowOnRender("/home/whd/SLAM/pic20231017/pangolin.png");
+            menuSaveImage=false;
         }
 
         d_cam.Activate(s_cam);

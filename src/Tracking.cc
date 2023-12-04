@@ -947,9 +947,7 @@ bool Tracking::TrackWithMotionModel()
 bool Tracking::TrackDynamic(){
 
     /// stpe1、追踪
-    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     mpInstanceTracking->OpticalFlowPyrLK(mImGray, mImGrayLast, mImGraySemantic,mCurrentFrame.mmDynamicKeys, mCurrentFrame.mmDynamicOptFlowID, mLastFrame.mmDynamicKeys);
-    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 
     /*
     int num=0;
@@ -975,27 +973,27 @@ bool Tracking::TrackDynamic(){
                                      mCurrentFrame.mmDynamicOptFlowID,mLastFrame.mmDynamicDepth,mLastFrame.mmDynamicPoses);
 
 
-    for(auto p: vp3d)
-        mpMap->AddMapPointDynamic(p);
+    for(auto p: vp3d){
+        cv::Point3f* P = new cv::Point3f(p);
+        mpMap->AddMapPointDynamic(P);
+    }
 
-    std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
+
+
     /// step3、补充特征点并计算深度
     mpInstanceTracking->ComputeLabelAndBoundary(mImGraySemantic, mCurrentFrame.msDynamicLabel, mCurrentFrame.mmDynamicBoundary);
     //std::cout << "Boundary：" << mCurrentFrame.mmDynamicBoundary.size() << std::endl;
     mpInstanceTracking->FastDetectFill(mImGray, mImGraySemantic, mCurrentFrame.mmDynamicBoundary, mCurrentFrame.mmDynamicKeys);
-    std::chrono::steady_clock::time_point t4 = std::chrono::steady_clock::now();
+
 
     // old
     //mpInstanceTracking->ComputeDisp(mImGray,mImGrayRight,mCurrentFrame.mmDynamicKeys, mCurrentFrame.mmDynamicDepth, 11, 0, 64);
+    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     mpInstanceTracking->ComputeDisp(mImGray,mImGrayRight,mCurrentFrame.mmDynamicBoundary, mCurrentFrame.mmDynamicKeys, mCurrentFrame.mmDynamicDepth, 11, 0, 128);
-
-    std::chrono::steady_clock::time_point t5 = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 
     double t12= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
-    double t23= std::chrono::duration_cast<std::chrono::duration<double> >(t3 - t2).count();
-    double t34= std::chrono::duration_cast<std::chrono::duration<double> >(t4 - t3).count();
-    double t45= std::chrono::duration_cast<std::chrono::duration<double> >(t5 - t4).count();
-    cout << "t12: " << t12 << "  t23: " << t23 << "  t34: " << t34 << "  t45: " << t45 << endl;
+    cout << "ComputeDisp: " << t12 << endl;
     return true;
 }
 

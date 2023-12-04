@@ -83,7 +83,7 @@ int main(int argc, char **argv)
 
     // Main loop
     cv::Mat imLeft, imRight, imSemantic;
-    for(int ni=0; ni<nImages; ni++)
+    for(int ni=1145; ni<nImages; ni++)
     {
         // Read left and right images from file
         imLeft = cv::imread(vstrImageLeft[ni],CV_LOAD_IMAGE_UNCHANGED);
@@ -131,6 +131,9 @@ int main(int argc, char **argv)
         while(SLAM.isStop()){
             usleep(300);
         }
+
+        if(ni == nImages-3)
+            usleep(1*1e10);
     }
 
     // Stop all threads
